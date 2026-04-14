@@ -1,0 +1,58 @@
+\section{Geometry-Aware SE(3) Tracking}
+
+\input{figures/se3}
+
+While algebraic tracking based on homography estimation provides efficient frame-to-frame motion estimation, it lacks explicit geometric constraints and frequently becomes unstable under large viewpoint variations or partial occlusions. To address these limitations, we introduce a geometry-aware render-and-track formulation. As illustrated in Figure~\ref{fig:se3}, this architecture leverages known object geometry to explicitly model the camera pose on the $\mathrm{SE}(3)$ manifold, utilizing a state machine to dynamically switch between global matching and local optical flow.
+
+\subsection{Multiscale Synthetic Reference Rendering}
+
+Instead of relying solely on 2D image-space templates, the proposed approach generates a stack of $L$ synthetic reference views of the target object across multiple scale levels. For each rendered view, the pipeline extracts three primary assets: a textured render, a set of GPU-accelerated binary descriptors, and a dense object-space coordinate buffer. 
+
+Let a 3D point on the object surface be denoted as $\mathbf{X} \in \mathbb{R}^3$. During the rendering stage, this point is projected into image space according to the standard camera projection model:
+
+\[
+\mathbf{x} \sim K [R \;|\; t] \mathbf{X}
+\]
+
+where $K$ is the camera intrinsic matrix and $(R,t)$ represent the camera pose. The rendering stage outputs the exact object-space vertex coordinates into the dedicated coordinate buffer, producing a dense, pixel-perfect mapping between the 2D rendered image and the 3D object surface.
+
+\subsection{Dual-Branch State Machine}
+
+To maintain real-time performance, the incoming camera frame is downscaled (capped at a maximum resolution of $R_{\max}$) and converted to grayscale. A central state machine then routes the frame into one of two specialized tracking branches:
+
+\begin{itemize}
+    \item \textbf{Global Matching Branch (Initialization \& Recovery):} If tracking is currently lost, the frame passes through a GPU-accelerated feature extraction pipeline (Shi-Tomasi detection, orientation, and binary descriptor extraction). These features are matched against the multiscale query stack to find the optimal scale level, denoted as $\ell^* = \arg\max_\ell|\mathcal{M}_\ell|$, using Lowe's ratio test.
+    \item \textbf{Optical Flow Branch (Continuous Tracking):} If tracking is active, the system bypasses global extraction and relies on pyramidal Lucas--Kanade (LK) tracking to propagate features from the previous frame to the current frame. This is fortified by Forward-Backward validation, discarding points where the cyclic tracking error $\|\mathbf{x}_{t-1} - \hat{\mathbf{x}}_{t-1}\| \geq \varepsilon$.
+\end{itemize}
+
+In both branches, the raw correspondences are heavily filtered using a RANSAC-based homography check. Only geometrically verified inliers (passing a strict reprojection threshold and quad-check) are permitted to proceed down the pipeline.
+
+\subsection{2D--3D Correspondence Lifting and SE(3) Optimization}
+
+Once the robust inliers are isolated from either the matching or optical flow branch, they must be converted from 2D pixel coordinates into 3D spatial constraints. Because the rendering stage pre-computed the object-space coordinates for the optimal scale level $\ell^*$, every verified feature in the reference image can be directly queried against the coordinate buffer. 
+
+This lifts the data into 2D--3D correspondence pairs of the form:
+
+\[
+(\mathbf{x}_i, \mathbf{X}_i)
+\]
+
+where $\mathbf{x}_i$ is the observed feature in the live camera image and $\mathbf{X}_i$ is the exact 3D surface point. 
+
+Given this set of 2D--3D correspondences, the camera pose is refined by minimizing the reprojection error between the observed image points and the projected 3D object points. The pose is parameterized on the $\mathrm{SE}(3)$ manifold and optimized using Gauss--Newton iterations:
+
+\[
+\min_{\boldsymbol{\xi}}
+\sum_i
+\left\|
+\mathbf{x}_i - \pi(\mathbf{K}\exp(\hat{\boldsymbol{\xi}})\mathbf{T}\mathbf{X}_i)
+\right\|^2
+\]
+
+where $\pi(\cdot)$ denotes the camera projection function, $\mathbf{T}$ represents the current rigid-body transformation, and $\boldsymbol{\xi}$ represents the minimal 6-DoF update step.
+
+\subsection{Failure Handling and Implementation}
+
+As shown by the dashed return paths in Figure~\ref{fig:se3}, the system is designed to be highly fault-tolerant. If the RANSAC stage yields too few inliers, or if the Lucas--Kanade point count drops below a critical threshold ($\texttt{LK\_MIN}$), the state machine instantly flags tracking as \texttt{false}. This triggers a reset, forcing the next frame back through the global matching branch for re-localization. A successful $\mathrm{SE}(3)$ pose output increments a confirmation counter; once a minimum consecutive tracking threshold is met ($\geq \texttt{MIN\_CONFIRM}$), the state machine locks back into the highly efficient optical flow branch.
+
+From a systems perspective, the rendering stage is implemented using a lightweight, cross-platform graphics abstraction built on the \textit{Sokol} framework. On Android devices, the system utilizes OpenGL ES~3. This ensures that the generation of the critical coordinate buffers remains highly portable across edge devices while fully exploiting mobile GPU hardware.

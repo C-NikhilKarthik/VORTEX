@@ -1,0 +1,36 @@
+\begin{table}[htbp]
+\centering
+\caption{Ablation study comparing runtime and tracking behavior across variants.}
+\label{tab:ablation}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc p{5cm}}
+\toprule
+\textbf{Variant} & \textbf{Matching (ms)} & \textbf{Tracking FPS} & \textbf{Reloc. FPS} & \textbf{Observation} \\
+\midrule
+Full Method (Proposed)
+    & 31.0
+    & $\sim$71
+    & $\sim$65
+    & Robust scale handling and stable 6-DoF pose \\
+
+Single-Scale Rendering
+    & 5.7
+    & $\sim$75
+    & $>$30
+    & Faster matching but suffers from scale ambiguity \\
+
+Without Depth-Guided Refinement
+    & 31.0
+    & $\sim$60
+    & $>$30
+    & Homography-only alignment; reduced geometric accuracy \\
+
+Without Optical Flow
+    & 31.0 (every frame)
+    & $\sim$20 (with SE(3))
+    & $\sim$30 (no SE(3))
+    & No temporal reuse; high computational load \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}

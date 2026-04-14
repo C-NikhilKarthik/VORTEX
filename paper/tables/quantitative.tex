@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\caption{Overall quantitative performance on live camera sequences.}
+\label{tab:quantitative}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{Unit} & \textbf{Mode} & \textbf{Notes} \\
+\midrule
+Rotation Error              & $< 1^\circ$ & degrees & Tracking      & Stable across viewpoints \\
+Translation Error           & 1--2        & pixels  & Tracking      & Image-space reprojection \\
+Tracking Success Rate       & 98.82       & \%      & Full sequence & Includes relocalization \\
+Average Frame Time          & 14.0        & ms      & Tracking mode & Continuous tracking \\
+Effective FPS               & 71          & FPS     & Tracking mode & Sustained performance \\
+Amortized FPS (incl.\ matching) & $\sim$65 & FPS   & Full pipeline & Matching every 5 frames \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}

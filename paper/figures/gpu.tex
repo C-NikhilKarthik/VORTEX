@@ -1,0 +1,164 @@
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+
+  %% ══════════════════════════════════════════════════════════════
+  %%  TOP PIPELINE (3 Vertical Rows)
+  %% ══════════════════════════════════════════════════════════════
+  
+  \begin{scope}[node distance=1.0cm]
+      %% ROW 2: The 4 GPU-accelerated steps (Placed first for central anchoring)
+      \node[gpuhw] (GS3) at (0,0) {Grayscale\\[-2pt]\scriptsize\itshape GPU shader};
+      \node[gpuhw, right=of GS3] (KP3) {Keypoint Detection\\[-2pt]\scriptsize\itshape shader kernel};
+      \node[gpuhw, right=of KP3] (DESC3) {Descriptor Compute\\[-2pt]\scriptsize\itshape parallel threads};
+      \node[gpuhw, right=of DESC3] (MATCH3) {Parallel Match\\[-2pt]\scriptsize\itshape thread-per-descriptor};
+
+      %% ROW 1: Camera Frame (Aligned above Grayscale)
+      \node[bbnodeD, above=2.0cm of GS3] (IN3) {Camera Frame};
+
+      %% ROW 3: Homography (Aligned below Match)
+      \node[bbnodeD, below=2.0cm of MATCH3] (POSE3) {Homography/\\[-2pt]Optical Flow};
+  \end{scope}
+
+  %% Connections
+  % Downward arrow into GPU
+  \draw[fwG, line width=1.2pt] (IN3.south) -- (GS3.north)
+      node[annG, midway, right, align=left, xshift=2pt] {\textbf{PCIe Upload}\\Frame to VRAM};
+      
+  % Horizontal GPU internal arrows
+  \draw[fwG] (GS3.east) -- (KP3.west);
+  \draw[fwG] (KP3.east) -- (DESC3.west);
+  \draw[fwG] (DESC3.east) -- (MATCH3.west);
+  
+  % Downward arrow out of GPU
+  \draw[fwG, line width=1.2pt, color=bbdark] (MATCH3.south) -- (POSE3.north)
+      node[annG, midway, left, align=right, xshift=-2pt, color=bbdark] {\textbf{PCIe Readback}\\Matches to RAM};
+
+  %% Brace below GPU pipeline
+  \draw[decorate, decoration={brace,amplitude=5pt,mirror}, gpuborder, line width=0.7pt]
+      ($(GS3.south west)+(0,-0.2)$) -- ($(MATCH3.south east)+(0,-0.2)$)
+      node[midway, below=6pt, font=\scriptsize\sffamily, text=gpuborder]
+          {GPU-accelerated stages (on-device GLSL/Metal shaders)};
+
+  %% ══════════════════════════════════════════════════════════════
+  %%  BOTTOM PANEL (Distributed to Full Width)
+  %% ══════════════════════════════════════════════════════════════
+  
+  \begin{scope}[shift={($(GS3.south west) + (0, -5cm)$)}]
+      
+      % Panel Title
+      \node[font=\footnotesize\sffamily\bfseries, text=bbdark!80, anchor=north west] 
+          (GPU_TITLE) at (0, 1) {How GPU offloading parallelises feature tracking};
+
+      %% --- SECTION 1: MEMORY TRANSFER (Left) ---
+      \begin{scope}[shift={(0, -1)}]
+          \node[font=\tiny\sffamily\bfseries, text=bbdark, anchor=south] 
+              at (1.9, 0.9) {1. Memory Transfer Bottleneck};
+              
+          % CPU RAM Box
+          \draw[bbborder, fill=bbgray!60, rounded corners=2pt] (0, 0) rectangle (1.1, 0.8);
+          \node[font=\tiny\sffamily, text=bbdark, align=center] at (0.55, 0.4) {CPU\\RAM};
+          
+          % GPU VRAM Box
+          \draw[gpuborder!70, fill=gpugreen!40, rounded corners=2pt] (2.7, 0) rectangle (3.8, 0.8);
+          \node[font=\tiny\sffamily, text=gpuborder!60!black, align=center] at (3.25, 0.4) {GPU\\VRAM};
+          
+          % Arrows
+          \draw[-{Stealth[length=6pt,width=5pt]}, line width=1.2pt, gpuborder] 
+              (1.2, 0.55) -- (2.6, 0.55) node[midway, above, font=\tiny\sffamily\itshape] {Upload};
+          \draw[{Stealth[length=6pt,width=5pt]}-, line width=1.2pt, bbdark!60] 
+              (1.2, 0.25) -- (2.6, 0.25) node[midway, below, font=\tiny\sffamily\itshape] {Readback};
+      \end{scope}
+
+      %% --- SECTION 2: HARDWARE / SHADER CORES (Center) ---
+      \begin{scope}[shift={(6.5, -0.6)}]
+          \node[font=\tiny\sffamily\bfseries, text=gpuborder, anchor=south] 
+              at (2.5, 0.6) {2. Shader Multiprocessors (Massive Grid)};
+          
+          %% GPU Chip illustration
+          \coordinate (gchip) at (0, -0.2);
+          \fill[gpugreen!30, draw=gpuborder, line width=0.8pt, rounded corners=3pt]
+              ($(gchip)+(-0.7,-0.6)$) rectangle ($(gchip)+(0.7,0.6)$);
+          \foreach \p in {-0.42, 0, 0.42}{
+            \draw[gpuborder, line width=0.6pt] ($(gchip)+(\p,0.6)$) -- ($(gchip)+(\p,0.8)$);
+            \draw[gpuborder, line width=0.6pt] ($(gchip)+(\p,-0.6)$) -- ($(gchip)+(\p,-0.8)$);
+          }
+          \foreach \p in {-0.3, 0.3}{
+            \draw[gpuborder, line width=0.6pt] ($(gchip)+(-0.7,\p)$) -- ($(gchip)+(-0.9,\p)$);
+            \draw[gpuborder, line width=0.6pt] ($(gchip)+(0.7,\p)$) -- ($(gchip)+(0.9,\p)$);
+          }
+          \node[font=\scriptsize\sffamily\bfseries, text=gpuborder!80!black] at (gchip) {GPU};
+          
+          %% Core Grid (representing thousands of ALUs)
+          \begin{scope}[shift={(1.4, -0.8)}]
+              \foreach \row in {0,1,2,3}{
+                \foreach \col in {0,...,8}{
+                  \fill[gpucore, opacity=0.85] (\col*0.42, \row*0.35) rectangle +(0.36,0.28);
+                  \draw[gpuborder!40, line width=0.25pt] (\col*0.42, \row*0.35) rectangle +(0.36,0.28);
+                }
+              }
+          \end{scope}
+      \end{scope}
+
+      %% --- SECTION 3: THREAD EXECUTION (Right) ---
+      \begin{scope}[shift={(13.2, -1)}]
+          \node[font=\tiny\sffamily\bfseries, text=gpuborder, anchor=south] 
+              at (1.2, 1) {3. Thread-per-Descriptor Mapping};
+              
+          % Input array
+          \foreach \x in {0,1,2,3,4} {
+              \draw[bbborder!70, fill=bbgray!80, rounded corners=1pt] (\x*0.6, 0.6) rectangle +(0.5, 0.3);
+          }
+          \node[font=\tiny\sffamily, text=bbdark, anchor=east] at (-0.1, 0.75) {Input Array};
+          
+          % Threads
+          \foreach \x in {0,1,2,3,4} {
+              \draw[-{Stealth[length=4pt,width=3pt]}, gpuborder, line width=0.8pt] 
+                  (\x*0.6 + 0.25, 0.5) -- (\x*0.6 + 0.25, 0.1);
+              \node[font=\tiny\sffamily\bfseries, text=gpuborder] at (\x*0.6 + 0.25, 0.3) {$\sim$}; 
+          }
+          \node[font=\tiny\sffamily, text=gpuborder, anchor=east] at (-0.1, 0.3) {GPU Threads};
+          
+          % Output array
+          \foreach \x in {0,1,2,3,4} {
+              \draw[gpuborder!50, fill=gpugreen!40, rounded corners=1pt] (\x*0.6, -0.3) rectangle +(0.5, 0.3);
+          }
+          \node[font=\tiny\sffamily, text=gpuborder!60!black, anchor=east] at (-0.1, -0.15) {Results};
+          
+          \node[font=\tiny\sffamily\itshape, text=bbdark!70, anchor=north] 
+              at (1.1, -0.45) {Thousands of threads execute in unison};
+              
+          % Invisible anchor for bounding box
+          \node (THREAD_ANCHOR) at (3.5, -0.45) {};
+      \end{scope}
+
+      %% Invisible bounding box perfectly aligned with the top pipeline width
+      \coordinate (PANEL_LEFT) at (IN3.west |- GPU_TITLE.north);
+      \coordinate (PANEL_RIGHT) at (POSE3.east |- THREAD_ANCHOR);
+      \node (GPU_PANEL_BBOX) [fit=(PANEL_LEFT) (PANEL_RIGHT)] {};
+
+  \end{scope}
+
+  %% ══════════════════════════════════════════════════════════════
+  %%  BACKGROUND PANELS
+  %% ══════════════════════════════════════════════════════════════
+  \begin{pgfonlayer}{background}
+    %% Pipeline outer strip
+    \node[fill=bbgray!20, draw=bbborder!35, rounded corners=7pt,
+          inner sep=12pt, fit=(IN3)(GS3)(KP3)(DESC3)(MATCH3)(POSE3)] (pipelinepanel) {};
+
+    %% GPU green highlight over accelerated nodes
+    \node[fill=gpugreen!15, draw=gpuborder!35, rounded corners=6pt,
+          inner sep=9pt, fit=(GS3)(KP3)(DESC3)(MATCH3)] {};
+
+    %% Bottom Illustration panel
+    \node[fill=bbgray!20, draw=bbborder!25, rounded corners=6pt,
+          inner xsep=10pt, inner ysep=10pt, fit=(GPU_PANEL_BBOX)] {};
+  \end{pgfonlayer}
+
+\end{tikzpicture}%
+}
+\caption{GPU-accelerated configuration. The pipeline is restructured so that Grayscale conversion, Keypoint detection, descriptor computation, and Hamming-distance matching are all offloaded to programmable GPU shaders. The camera frame is uploaded once to VRAM. Thousands of threads process the image in parallel, and only the compact match results are read back to the CPU for homography and optical flow.}
+\label{fig:gpu}
+\end{figure}

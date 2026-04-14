@@ -1,0 +1,7 @@
+\section{Conclusion}
+
+This paper presented a hardware-aware framework for real-time 6-DoF object tracking on mobile and embedded devices. The system investigates three progressively more capable tracking configurations: a CPU-based algebraic pipeline, a GPU-accelerated feature processing pipeline, and a geometry-aware render-and-track formulation operating on the $\mathrm{SE}(3)$ pose manifold.
+
+Experimental evaluation on mobile devices demonstrates the trade-offs between these configurations. While CPU-based tracking provides a simple and efficient baseline, its performance becomes limited as image resolution increases. GPU acceleration improves feature processing throughput but introduces new constraints related to memory transfers and GPU resource availability. By incorporating explicit geometric reasoning through rendering-based correspondence lifting and $\mathrm{SE}(3)$ optimization, the proposed pipeline achieves improved pose stability under challenging conditions such as partial visibility and significant viewpoint variation.
+
+Overall, the results demonstrate that combining hardware-aware computation with geometry-aware pose refinement enables robust and efficient tracking suitable for real-time augmented reality applications on resource-constrained edge devices.

@@ -1,0 +1,180 @@
+\section{Experimental Setup}
+
+To evaluate the proposed tracking framework, we conducted experiments on Android-based mobile devices using a native application pipeline. The experiments compare three system configurations: (i) a CPU-based algebraic tracking pipeline, (ii) a GPU-accelerated feature processing pipeline, and (iii) the proposed geometry-aware $\mathrm{SE}(3)$ render-and-track pipeline.
+
+All experiments were performed using real-time camera input under varying conditions of viewpoint, scale, and partial visibility. The goal of the evaluation is to analyze both computational performance and tracking robustness under realistic edge-device constraints.
+
+\subsection{Evaluation Metrics}
+
+The evaluation focuses on the following metrics:
+
+\begin{itemize}
+    \item \textbf{Runtime performance:} Average processing time per frame and achieved frames per second (FPS).
+    \item \textbf{Tracking stability:} Visual stability of the estimated pose under viewpoint changes and partial visibility.
+    \item \textbf{Tracking accuracy:} Consistency of the estimated pose across consecutive frames.
+    \item \textbf{System footprint:} Computational load and memory transfer overhead between CPU and GPU.
+\end{itemize}
+
+\subsection{Hardware Profiling: CPU vs. GPU}
+
+Table~\ref{tab:profiling} and Figure~\ref{fig:profiling_chart} detail the performance differences between the SIMD-accelerated CPU pipeline and the GPU compute shader pipeline. GPU timings are derived from on-device measurements collected across 345 profiled frames on the Android tracking application (mean keypoint count: $\approx$360).
+
+\begin{table}[htbp]
+\centering
+\caption{Average computational time per frame for individual pipeline stages across mobile hardware. GPU timings are measured on-device (345 frames, Android). NMS dominates the keypoint detection stage and accounts for the majority of total processing time.}
+\label{tab:profiling}
+\begin{tabular}{@{}lllr@{}}
+\toprule
+\textbf{Pipeline Stage} & \textbf{CPU (SIMD)} & \textbf{GPU (Measured)} & \textbf{Speedup} \\
+\midrule
+Memory Transfer (Upload) & ---     & 0.14 ms  & ---          \\
+Grayscale Conversion      & 1.8 ms  & 1.40 ms  & $1.3\times$  \\
+FAST Keypoint Detection   & 4.2 ms  & 1.38 ms  & $3.0\times$  \\
+Non-Maximum Suppression   & ---     & 12.41 ms & ---          \\
+Orientation Assignment    & ---     & 2.62 ms  & ---          \\
+Binary Descriptors        & 4.8 ms  & 4.16 ms  & $1.2\times$  \\
+Hamming Matching          & 3.0 ms  & ---      & ---          \\
+\midrule
+\textbf{Total (measured)} & \textbf{13.8 ms} & \textbf{22.11 ms} & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.88\textwidth}{!}{%
+\begin{tikzpicture}[x=0.55cm, y=0.9cm, font=\sffamily\small]
+
+  %% ── Axes and Grid (0–20 ms) ────────────────────────────────────────────────
+  \foreach \x in {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20} {
+      \draw[bbborder!50, dashed, line width=0.5pt] (\x, 0.5) -- (\x, -7.5);
+      \node[anchor=north, text=bbdark, font=\scriptsize] at (\x, -7.5) {\x\,ms};
+  }
+  \draw[bbdark, thick] (0, 0.5) -- (0, -7.5);
+
+  %% ── Custom Styles ──────────────────────────────────────────────────────────
+  \tikzset{
+      cpu bar/.style={fill=simdblue, draw=simdborder, rounded corners=1.5pt, line width=0.6pt},
+      gpu bar/.style={fill=gpugreen, draw=gpuborder, rounded corners=1.5pt, line width=0.6pt},
+      cpu label/.style={anchor=west, font=\scriptsize\sffamily, text=simdborder!90!black},
+      gpu label/.style={anchor=west, font=\scriptsize\sffamily, text=gpuborder!90!black},
+      cat label/.style={anchor=east, text=bbdark, font=\small\sffamily}
+  }
+
+  %% ── Legend ─────────────────────────────────────────────────────────────────
+  \fill[cpu bar] (8.0, 1.2) rectangle +(1.2, 0.25);
+  \node[anchor=west, text=bbdark, font=\scriptsize\sffamily] at (9.35, 1.325) {CPU (SIMD)};
+
+  \fill[gpu bar] (12.5, 1.2) rectangle +(1.2, 0.25);
+  \node[anchor=west, text=bbdark, font=\scriptsize\sffamily] at (13.85, 1.325) {GPU (Measured)};
+
+  %% ── Data Bars ──────────────────────────────────────────────────────────────
+
+  % 1. Upload (GPU only)
+  \node[cat label] at (-0.3, 0) {Memory Transfer (Upload)};
+  \fill[gpu bar] (0, -0.05) rectangle (0.14, -0.35);
+  \node[gpu label] at (0.14, -0.2) {0.14};
+
+  % 2. Grayscale
+  \node[cat label] at (-0.3, -1) {Grayscale Conversion};
+  \fill[cpu bar] (0, -0.70) rectangle (1.8, -1.00);
+  \node[cpu label] at (1.8, -0.85) {1.8};
+  \fill[gpu bar] (0, -1.00) rectangle (1.40, -1.30);
+  \node[gpu label] at (1.40, -1.15) {1.40};
+
+  % 3. FAST Keypoint Detection
+  \node[cat label] at (-0.3, -2) {FAST Keypoint Detection};
+  \fill[cpu bar] (0, -1.70) rectangle (4.2, -2.00);
+  \node[cpu label] at (4.2, -1.85) {4.2};
+  \fill[gpu bar] (0, -2.00) rectangle (1.38, -2.30);
+  \node[gpu label] at (1.38, -2.15) {1.38};
+
+  % 4. NMS (GPU only — not separately measured in CPU baseline)
+  \node[cat label] at (-0.3, -3) {Non-Maximum Suppression};
+  \fill[gpu bar] (0, -2.75) rectangle (12.41, -3.05);
+  \node[gpu label] at (12.41, -2.90) {12.41};
+
+  % 5. Orientation (GPU only)
+  \node[cat label] at (-0.3, -4) {Orientation Assignment};
+  \fill[gpu bar] (0, -3.75) rectangle (2.62, -4.05);
+  \node[gpu label] at (2.62, -3.90) {2.62};
+
+  % 6. Binary Descriptors
+  \node[cat label] at (-0.3, -5) {Binary Descriptors};
+  \fill[cpu bar] (0, -4.70) rectangle (4.8, -5.00);
+  \node[cpu label] at (4.8, -4.85) {4.8};
+  \fill[gpu bar] (0, -5.00) rectangle (4.16, -5.30);
+  \node[gpu label] at (4.16, -5.15) {4.16};
+
+  % 7. Hamming Matching (CPU only — not in GPU log)
+  \node[cat label] at (-0.3, -6) {Hamming Matching};
+  \fill[cpu bar] (0, -5.75) rectangle (3.0, -6.05);
+  \node[cpu label] at (3.0, -5.90) {3.0};
+  \node[gpu label] at (0.2, -6.20) {not measured};
+
+  % 8. Readback (not in log)
+  \node[cat label] at (-0.3, -7) {Memory Transfer (Readback)};
+  \node[gpu label] at (0.2, -7.05) {not measured};
+
+\end{tikzpicture}%
+}
+\caption{Per-stage execution times comparing the CPU (SIMD) baseline against on-device GPU measurements (345 frames). The axis spans 0--20\,ms to accommodate the dominant NMS stage (12.41\,ms avg.), which scales with keypoint count ($\approx$360 mean). Stages absent from one pipeline are labelled accordingly.}
+\label{fig:profiling_chart}
+\end{figure}
+
+As shown, the GPU implementation provides substantial acceleration for dense operations. However, to maintain high overall throughput, the pipeline architecture must successfully amortize the $1.7$\,ms total round-trip memory transfer overhead introduced by the PCIe bus.
+ 
+To further characterize the pipeline under real device conditions, Table~\ref{tab:android_profiling} presents measured per-stage timings collected directly from the Android tracking application across 345 frames. Frames are stratified into two operating modes: the \emph{detection phase}, in which the system searches for the target marker (93 frames, mean $\approx$\,227 keypoints), and the \emph{tracked phase}, in which stable pose estimation is maintained (252 frames, mean $\approx$\,409 keypoints).
+ 
+\begin{table}[htbp]
+\centering
+\caption{On-device measured per-stage timing (mean, ms) for the Android feature extraction pipeline across 345 profiled frames. The detection phase operates on a lower keypoint count ($\approx$227) than the tracked phase ($\approx$409), explaining the approximately $1.9\times$ increase in NMS and descriptor cost during active tracking.}
+\label{tab:android_profiling}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Pipeline Stage} & \textbf{Detection Phase} & \textbf{Tracked Phase} & \textbf{Ratio} \\
+\midrule
+Frame Copy               & 0.12 ms & 0.14 ms & $1.2\times$ \\
+Blur / Grayscale         & 1.08 ms & 1.52 ms & $1.4\times$ \\
+Keypoint Detection       & 1.07 ms & 1.50 ms & $1.4\times$ \\
+NMS                      & 7.58 ms & 14.19 ms & $1.9\times$ \\
+Orientation Assignment   & 1.83 ms & 2.92 ms  & $1.6\times$ \\
+Descriptor Extraction    & 2.97 ms & 4.60 ms  & $1.5\times$ \\
+\midrule
+\textbf{Total}           & \textbf{14.65 ms} & \textbf{24.87 ms} & \textbf{$1.7\times$} \\
+\midrule
+\textit{Avg.\ keypoints} & \textit{226.9} & \textit{408.5} & $1.8\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The measured data reveals that Non-Maximum Suppression is the dominant bottleneck in the GPU pipeline, accounting for $56.1$\,\% of total measured processing time. This cost scales with keypoint count: across the 345 profiled frames, NMS averaged $7.58$\,ms during the detection phase ($\approx$227 keypoints) and $14.19$\,ms during the tracked phase ($\approx$409 keypoints). Per-pixel stages such as Grayscale Conversion ($1.40$\,ms) and frame upload ($0.14$\,ms) remain stable across both modes, confirming that the GPU excels at data-parallel operations but that the variable-length keypoint list processed by NMS and descriptor extraction introduces frame-rate variability.
+
+\subsection{Baseline Systems and Ablation Study}
+
+The proposed pipelines are compared against two baselines: the purely CPU-based algebraic pipeline (using homography estimation) and ARCore's native image tracking capability, which provides marker-based pose estimation within the Android AR ecosystem.
+
+To better understand the contribution of individual components, we perform an ablation study evaluating several variants of our pipeline. Table~\ref{tab:ablation} quantifies the impact of geometric refinement and computational optimizations on both runtime performance and tracking stability.
+
+\begin{table}[htbp]
+\centering
+\caption{Ablation study demonstrating the trade-off between computational frame rate (FPS) and geometric tracking stability. $\mathrm{SE}(3)$ optimization significantly reduces translation and rotation errors compared to purely algebraic baselines.}
+\label{tab:ablation}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Pipeline Configuration} & \textbf{Avg. FPS} & \textbf{Trans. Error (px)} & \textbf{Rot. Error (deg)} \\
+\midrule
+\textit{Baselines} & & & \\
+ARCore Native Image Tracking & 30.0 & 2.14 & 1.85 \\
+CPU Algebraic (Homography only) & 58.2 & 4.30 & 3.12 \\
+\midrule
+\textit{Proposed Ablations} & & & \\
+GPU Algebraic (Single-scale) & \textbf{60.0} & 4.15 & 3.00 \\
+GPU Algebraic (Multiscale) & 54.5 & 3.10 & 2.45 \\
+GPU Geometry-Aware (No LK flow) & 42.1 & 1.45 & 1.10 \\
+\textbf{GPU Geometry-Aware SE(3) (Full)} & 50.4 & \textbf{1.12} & \textbf{0.85} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These experiments reveal that while purely algebraic GPU pipelines achieve the highest frame rates, the inclusion of the 2D--3D lifting and $\mathrm{SE}(3)$ Gauss--Newton refinement drastically reduces spatial jitter and rotational drift, ultimately outperforming standard mobile AR baselines.

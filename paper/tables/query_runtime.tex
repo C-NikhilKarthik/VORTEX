@@ -1,0 +1,16 @@
+\begin{table}[htbp]
+\centering
+\caption{One-time query preprocessing cost per scale level.}
+\label{tab:query_runtime}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Stage} & \textbf{Time (ms)} & \textbf{Description} \\
+\midrule
+GPU Depth + Texture Readback    & 8.5 & Coordinate + appearance buffers \\
+Query Keypoint Detection        & 1.0 & GPU-based \\
+Query Descriptor Extraction     & 6.0 & GPU-based binary descriptor \\
+\midrule
+\textbf{Total (per level)}      & \textbf{$\sim$15.5} & One-time cost \\
+\bottomrule
+\end{tabular}
+\end{table}

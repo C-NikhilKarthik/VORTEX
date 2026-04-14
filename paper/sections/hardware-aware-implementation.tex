@@ -1,0 +1,32 @@
+\section{Hardware-Aware Implementations}
+
+To achieve real-time performance on mobile-class and edge devices, the proposed system incorporates hardware-aware optimizations tailored for both CPU and GPU execution. While the underlying algebraic formulation of the tracking pipeline remains identical across implementations, the computational stages are explicitly organized to exploit the architectural strengths---and mitigate the bottlenecks---of each processing unit.
+
+\subsection{CPU Implementation}
+
+\input{figures/cpu}
+
+The CPU-based pipeline is designed to minimize memory access latency and maximize instruction-level parallelism. Image frames are acquired directly from the native camera interface, allowing the system to operate on CPU-resident memory buffers. This zero-copy design avoids the synchronization and transfer overhead associated with passing high-resolution frames to a coprocessor.
+
+As illustrated in Figure~\ref{fig:cpu}, the most computationally dense stages of the pipeline---grayscale conversion, FAST keypoint extraction, binary descriptor generation, and Hamming-distance matching---are aggressively accelerated using Single Instruction, Multiple Data (SIMD) vectorization. By leveraging 128-bit ARM NEON intrinsics on mobile processors (or 256-bit AVX2 on desktop architectures), the pipeline transitions from a scalar execution model (one pixel per cycle) to a vectorized model that processes up to 8 pixels simultaneously. 
+
+Binary descriptor matching maps particularly well to this architecture; comparisons are performed using vectorized bitwise XOR operations followed by hardware population-count (\texttt{popcount} / \texttt{VCNT}) instructions. Combined with compiler-assisted auto-vectorization and cache-line-aligned memory layouts, this SIMD approach yields a $4\times$ to $8\times$ throughput improvement for feature processing. Once correspondences are established, frame-to-frame motion estimation (via RANSAC homography and Lucas--Kanade optical flow) is computed sequentially. These iterative, branch-heavy stages remain highly efficient on the CPU due to its superior branch prediction and low-latency cache hierarchy.
+
+\subsection{GPU Implementation}
+
+\input{figures/gpu}
+
+The GPU implementation offloads feature extraction and matching to programmable graphics pipelines, trading the CPU's low-latency sequential execution for massive throughput via parallel shader multiprocessors. 
+
+As detailed in Figure~\ref{fig:gpu}, a critical architectural constraint in GPU offloading is the memory transfer bottleneck. To minimize PCIe bus overhead, the native high-resolution camera feed is uploaded to GPU Video RAM (VRAM) exactly once per frame. All subsequent feature processing is implemented as a sequence of GLSL/Metal compute shaders operating via a ping-pong buffering strategy. This keeps the high-bandwidth intermediate data strictly on the GPU. The parallelized stages include:
+
+\begin{itemize}
+    \item \textbf{Grayscale Conversion \& Smoothing:} A fragment shader pass that prepares the raw texture.
+    \item \textbf{Keypoint Detection \& NMS:} Highly parallelized local contrast checks to isolate FAST corners.
+    \item \textbf{Descriptor Extraction:} Memory-coalesced texture sampling to build binary strings.
+    \item \textbf{Parallel Matching:} A compute kernel utilizing a \textit{thread-per-descriptor} execution model, where thousands of GPU threads simultaneously compute Hamming distances across the query and train sets.
+\end{itemize}
+
+While the GPU excels at this independent, pixel-wise processing, iterative algorithms like RANSAC homography estimation and pyramidal Lucas--Kanade tracking suffer on GPU architectures due to control-flow divergence and thread-group synchronization costs. Therefore, the pipeline employs a hybrid execution model: the massive parallelism of the GPU reduces the dense image into a sparse set of matches, and only this highly compact data structure is read back across the PCIe bus to CPU RAM. The CPU then efficiently handles the complex, branching logic of the final motion estimation.
+
+Together, these two hardware-aware paths allow the system to dynamically select the optimal execution strategy based on the host device's available compute tier, balancing CPU SIMD efficiency against massive GPU parallelism while maintaining strict real-time guarantees.

@@ -1,0 +1,184 @@
+\begin{figure}[p]
+\centering
+\resizebox{1\textwidth}{!}{%
+\begin{tikzpicture}[x=1cm, y=1cm]
+
+%% ═══════════════════════════════════════════════════════════════════════
+%%  QUERY STACK  (top, centred)
+%% ═══════════════════════════════════════════════════════════════════════
+\foreach \i in {\numscales,...,1} {
+    \pgfmathsetmacro{\dx}{(\i-1)*\deltadim}
+    \pgfmathsetmacro{\dy}{(\i-1)*\deltadim}
+    \node[querynode, anchor=north west,]
+        (render\i) at ($(\dx,\dy)$) {Render Mesh};
+    \node[querynode, anchor=north west,]
+        (coords\i) at (render\i.north east) {Coord Buffer};
+    \node[querynode, anchor=north west,]
+        (feats\i)  at (coords\i.north east) {GPU Descriptors};
+}
+\node[font=\scriptsize\sffamily\itshape, text=\querydraw,
+      right=0.28cm of feats1, align=left] {$L$\\levels};
+
+\draw[fw] ($(render1.west)+(-3.0,0)$) -- (render1.west)
+    node[ann, pos=0.5, above] {Query Image/Mesh};
+
+%% ═══════════════════════════════════════════════════════════════════════
+%%  CAMERA + DOWNSCALE + STATE MACHINE
+%% ═══════════════════════════════════════════════════════════════════════
+\node[camnode, anchor=north, below=2.0cm of coords1] (DS)
+    {Downscale \& Gray\\[-1pt]\scriptsize $(\leq R_{\max}$ px$)$};
+\draw[fw] ($(DS.west)+(-2.8,0)$) -- (DS.west)
+    node[ann, pos=0.4, above] {Camera Frame};
+
+\node[smnode, below=0.65cm of DS] (SM)
+    {\textbf{State Machine}\\[-2pt]
+     \scriptsize \textsc{matching} $\;\big|\;$ \textsc{optical flow}};
+\draw[fw] (DS.south) -- (SM.north);
+
+\coordinate (Lcol) at ($(SM.south)+(-3.4,0)$);
+\coordinate (Rcol) at ($(SM.south)+(+3.4,0)$);
+\coordinate (Mcol) at ($(SM.south)+(0,0)$);
+
+%% ═══════════════════════════════════════════════════════════════════════
+%%  LEFT BRANCH  –  MATCHING
+%% ═══════════════════════════════════════════════════════════════════════
+\node[matchnode] (GF) at ($(Lcol)+(0,-1.55)$)
+    {GPU Feature Extraction\\[-1pt]
+     \scriptsize Shi-Tomasi $\!\to\!$ orientation $\!\to\!$ binary desc};
+
+\draw[fw, rounded corners=4pt]
+    (SM.south) -- ++(0,-0.25)
+    node[ann, left=3pt] {\textsc{matching}}
+    -- ++(0,-0.35) -| (GF.north);
+
+\node[matchnode, below=0.48cm of GF] (MS)
+    {Multiscale Match\\[-1pt]
+     \scriptsize $\ell^*\!=\!\arg\max_\ell|\mathcal{M}_\ell|$\enspace Lowe ratio $\tau$};
+\draw[fw] (GF.south) -- (MS.north);
+
+\draw[qfeed, rounded corners=3pt]
+    (feats1.south)
+    -- ++(0,-0.6)
+    -- ++(-10.2,0)
+    |- (MS.west);
+
+\node[matchnode, below=0.48cm of MS] (HG)
+    {Homography (RANSAC)\\[-1pt]
+     \scriptsize reprojection $<3$px · quad check};
+\draw[fw] (MS.south) -- (HG.north);
+
+%% ═══════════════════════════════════════════════════════════════════════
+%%  RIGHT BRANCH  –  OPTICAL FLOW
+%% ═══════════════════════════════════════════════════════════════════════
+\node[lknode] (LK) at ($(Rcol)+(0,-1.55)$)
+    {Lucas--Kanade Tracking\\[-1pt]
+     \scriptsize prev $\!\to\!$ curr frame · pyramidal LK};
+
+\draw[lkarr, rounded corners=4pt]
+    (SM.south) -- ++(0,-0.25)
+    node[ann, right=3pt] {\textsc{optical flow}}
+    -- ++(0,-0.35) -| (LK.north);
+
+\node[lknode, below=0.48cm of LK] (FBV)
+    {Fwd--Bwd Validation\\[-1pt]
+     \scriptsize $\|\mathbf{x}_{t-1}\!-\!\hat{\mathbf{x}}_{t-1}\|<\varepsilon$
+     · boundary check};
+\draw[lkarr] (LK.south) -- (FBV.north);
+
+\node[lknode, below=0.48cm of FBV] (LKHG)
+    {Homography (RANSAC)\\[-1pt]
+     \scriptsize LK pts vs.\ query pts · quad check};
+\draw[lkarr] (FBV.south) -- (LKHG.north)
+    node[ann, pos=0.5, right=3pt] {status pts only};
+
+%% ═══════════════════════════════════════════════════════════════════════
+%%  MERGE — 2D–3D Lifting + SE(3) + Output
+%% ═══════════════════════════════════════════════════════════════════════
+\coordinate (mergeY) at ($(Mcol |- LKHG.south)+(0,-0.55)$);
+
+\node[posenode, anchor=north] (LIFT) at (mergeY)
+    {2D--3D Lifting\\[-1pt]
+     \scriptsize inliers only · coord buffer at $\ell^*$};
+
+\draw[fw, rounded corners=4pt]
+    (HG.south) -- ++(0,-0.2)
+    -| node[ann, pos=0.6, right=2pt] {inliers}
+    (LIFT.north west);
+
+\draw[lkarr, rounded corners=4pt]
+    (LKHG.south) -- ++(0,-0.2)
+    -| node[ann, pos=0.6, left=2pt] {inliers}
+    (LIFT.north east);
+
+\draw[qfeed, rounded corners=3pt]
+    (coords1.south)
+    -- ++(0,-1)
+    -- ++(-6.2,0)
+    |- (LIFT.west);
+
+\node[posenode, below=0.5cm of LIFT] (SE3)
+    {$\mathrm{SE}(3)$ Gauss--Newton Refinement\\[-2pt]
+     \scriptsize $\mathbf{T}\!\leftarrow\!\exp(\hat{\boldsymbol{\xi}})\mathbf{T}$
+     \enspace
+     $\min_{\boldsymbol{\xi}}\!\sum_i\|\mathbf{x}_i\!-\!\pi(\mathbf{KTX}_i)\|^2$};
+\draw[pose] (LIFT.south) -- (SE3.north);
+
+\node[smnode, below=0.5cm of SE3] (TR)
+    {Pose Output · confirm\texttt{++}\\[-1pt]
+     \scriptsize $\geq\!$\texttt{MIN\_CONFIRM\_FRAMES} $\Rightarrow$
+     tracking $=$ \texttt{true} · \textsc{optical flow}};
+\draw[pose] (SE3.south) -- (TR.north);
+
+%% ═══════════════════════════════════════════════════════════════════════
+%%  FAIL NODES
+%% ═══════════════════════════════════════════════════════════════════════
+\node[warnnode, anchor=center]
+    (FAIL) at ($(HG.west)+(-2.55, -1)$)
+    {Re-Match\strut\\[-2pt]quad fail $|$ inliers${<}\theta$ $|$ matches${<}\theta$};
+
+\draw[warn] (HG.west) --
+    node[annW, pos=0.5, above=1pt, rotate=90] {fail} (FAIL);
+\draw[warn] (MS.west) --
+    node[annW, pos=0.5, above=1pt, rotate=90] {matches${<}\theta$} (FAIL);
+\draw[warn, rounded corners=4pt]
+    (FAIL.north) -- ++(-0.3, 0)
+    |- node[annW, pos=0.2, above=1pt, rotate=90] {tracking $=$ \texttt{false}}
+    (GF.west);
+
+\node[warnnode, anchor=center, rotate=180]
+    (OFWEAK) at ($(LKHG.east)+(1.55, 0.5)$)
+    {OF Weak / Lost\strut\\[-2pt]pts${<}\texttt{LK\_MIN}$ $|$ quad fail};
+
+\draw[warn, rounded corners=3pt]
+    (LKHG.east) -- node[annW, pos=0.5, above=1pt, rotate=-90] {fail} (OFWEAK);
+\draw[warn, rounded corners=3pt]
+    (FBV.east) --
+    node[annW, pos=0.3, above=1pt, rotate=-90] {pts${<}\theta$} (OFWEAK);
+\draw[warn, rounded corners=4pt]
+    (OFWEAK.north) -- ++(0.3,0)
+    |- node[annW, pos=0.2, above=1pt, rotate=-90] {tracking $=$ \texttt{false} · reset}
+    (LK.east);
+
+\begin{pgfonlayer}{background}
+\node[
+    fill=gray!10,
+    draw=gray!60!black,
+    rounded corners=8pt,
+    inner sep=24pt,
+    fit=(DS)(SM)(GF)(MS)(HG)(LK)(FBV)(LKHG)(LIFT)(SE3)(TR)(OFWEAK)(FAIL)
+] {};
+\end{pgfonlayer}
+
+\end{tikzpicture}
+}
+\caption{%
+Overview of the GPU-centric detect--refine--track framework.
+\textbf{Top:} A stack of $L$ rendered reference meshes, object-space coordinates, and GPU descriptors.
+\textbf{Centre:} The camera frame is downscaled and grayscaled, then fed into a state machine that selects between global matching (left) or optical-flow-based tracking (right).
+\textbf{Left branch (matching):} GPU feature extraction, multiscale matching, and homography verification (RANSAC) produce inliers for 2D--3D lifting.
+\textbf{Right branch (optical flow):} Lucas--Kanade tracking with forward--backward validation and homography verification produces inliers for 2D--3D lifting.
+\textbf{Merge:} Inliers from both branches feed 2D--3D lifting, followed by $\mathrm{SE}(3)$ Gauss--Newton refinement and pose output confirmation.
+\textbf{Fail handling:} Re-match or optical-flow failure nodes loop back to the corresponding branches when matches or confidence fall below thresholds.
+}
+\label{fig:pipeline}
+\end{figure}

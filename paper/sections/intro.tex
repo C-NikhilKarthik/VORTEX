@@ -1,0 +1,21 @@
+\section{Introduction}
+
+Accurate six degrees-of-freedom (6-DoF) pose estimation is fundamental to augmented reality (AR), where virtual content must remain geometrically aligned with physical objects under strict real-time constraints. Although modern visual SLAM systems and learned pose regression models achieve high accuracy, they typically rely on dense mapping, global optimization, or large-scale training. Such approaches introduce significant computational and memory overhead, making them difficult to deploy on mobile and embedded platforms where latency, power, and resource constraints are critical.
+
+Classical feature-based tracking pipelines provide a computationally efficient alternative and remain widely used in mobile vision systems. These pipelines typically consist of image preprocessing, keypoint detection, descriptor extraction, and feature matching, followed by motion estimation using algebraic formulations such as homography estimation or optical flow. While lightweight, two major challenges remain. First, feature extraction and matching often dominate the runtime on resource-constrained devices, creating a critical computational bottleneck. Second, purely algebraic formulations lack explicit 3D geometric reasoning, making them susceptible to instability under out-of-plane rotations, rapid scale changes, and planar degeneracies.
+
+In this work, we investigate how hardware-aware acceleration and geometric reasoning can be jointly leveraged to enable efficient and stable tracking on edge devices. We develop a three-stage tracking framework that progressively addresses both computational and geometric limitations. First, we implement a highly optimized CPU-based algebraic tracking pipeline that exploits SIMD vectorization (e.g., ARM NEON) to accelerate feature detection, descriptor computation, and matching. Second, to further alleviate feature processing bottlenecks, we introduce a GPU-accelerated pipeline in which grayscale conversion, keypoint detection, and descriptor extraction are executed using custom fragment shaders, while descriptor matching is performed in parallel using compute shaders.
+
+While these optimizations significantly improve feature processing throughput, algebraic tracking methods remain fundamentally limited by the instability of planar homography estimation. To address this limitation, we introduce a geometry-aware render-and-track refinement stage formulated on the $\mathrm{SE}(3)$ pose manifold. Our approach renders synthetic reference views of known object geometry at discrete depth hypotheses and stores both appearance information and object-space coordinates. This representation enables direct lifting of image correspondences to 2D--3D constraints, allowing pose to be refined using Gauss--Newton optimization on $\mathrm{SE}(3)$.
+
+To efficiently combine these components, the system employs a hybrid detect--refine--track state machine that integrates global feature matching with lightweight Lucas--Kanade optical flow for frame-to-frame updates. 
+This design enables robust relocalization while maintaining real-time performance on mobile-class hardware without relying on learned models or persistent mapping.
+
+\paragraph{Contributions.}
+The main contributions of this work are:
+\begin{itemize}
+    \item A hardware-aware feature tracking foundation optimized for mobile devices using SIMD-accelerated CPU processing.
+    \item A fully GPU-resident feature processing pipeline that performs keypoint detection and descriptor construction using fragment shaders and parallel descriptor matching using compute shaders.
+    \item A geometry-aware render-and-track formulation that enables explicit 2D--3D correspondence lifting through synthetic reference rendering.
+    \item A Gauss--Newton optimization framework on $\mathrm{SE}(3)$ that improves pose stability and enables robust 6-DoF tracking without persistent mapping or learned priors.
+\end{itemize}

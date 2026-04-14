@@ -1,0 +1,70 @@
+\section{Algebraic Tracking Pipeline}
+
+The CPU and GPU tracking configurations share a common algebraic tracking formulation based on feature correspondences and planar homography estimation. This formulation provides efficient frame-to-frame motion estimation but lacks explicit geometric constraints, which can lead to instability under challenging viewing conditions.
+
+\subsection{Feature Detection and Matching}
+
+Given an input frame, salient keypoints are detected using the FAST corner detector. For each detected keypoint, a binary descriptor is computed to encode the local image structure. In our implementation, BRISK descriptors are used due to their robustness and efficient binary representation.
+
+Correspondences between frames are established by comparing binary descriptors using Hamming distance. This operation is implemented using population-count (popcount) instructions on the CPU and parallel compute kernels on the GPU. Despite the difference in hardware execution, both implementations compute the same matching criterion based on bitwise XOR operations.
+
+Let $d_i$ and $d_j$ denote two binary descriptors. Their similarity is evaluated as
+
+\[
+D(d_i,d_j) = \mathrm{popcount}(d_i \oplus d_j)
+\]
+
+where $\oplus$ denotes the XOR operation and $\mathrm{popcount}(\cdot)$ counts the number of set bits. Correspondences are selected by minimizing this distance.
+
+\subsection{Homography-Based Motion Estimation}
+
+Given a set of matched feature points $(x_i, y_i) \leftrightarrow (x'_i, y'_i)$, camera motion is estimated using a planar homography transformation. The homography matrix
+
+\[
+H =
+\begin{bmatrix}
+h_{11} & h_{12} & h_{13} \\
+h_{21} & h_{22} & h_{23} \\
+h_{31} & h_{32} & h_{33}
+\end{bmatrix}
+\]
+
+relates corresponding points between frames according to
+
+\[
+\lambda
+\begin{bmatrix}
+x' \\
+y' \\
+1
+\end{bmatrix}
+=
+H
+\begin{bmatrix}
+x \\
+y \\
+1
+\end{bmatrix}.
+\]
+
+The parameters of $H$ are estimated using the Direct Linear Transform (DLT) formulation
+
+\[
+A\mathbf{h} = 0
+\]
+
+where $\mathbf{h}$ represents the vectorized homography parameters. To improve robustness against mismatches, the estimation is performed within a RANSAC framework. Frame-to-frame tracking is further stabilized using Lucas--Kanade optical flow for local motion updates.
+
+\subsection{Numerical Instability Under Partial Visibility}
+
+Although computationally efficient, homography estimation becomes unstable when feature correspondences occupy only a small region of the image. In such cases, the matrix $A$ constructed by the DLT formulation becomes poorly conditioned because the coordinate values of the correspondences are highly correlated.
+
+The sensitivity of the solution can be characterized by the condition number $\kappa(A)$. When $\kappa(A)$ becomes large, small perturbations in the observed feature locations result in large changes in the estimated homography:
+
+\[
+\|\Delta \mathbf{h}\| \leq \kappa(A)\|\Delta \mathbf{b}\|.
+\]
+
+In practice, this occurs when the visible portion of the object is small or when feature points are clustered within a limited image region. The system then lacks sufficient geometric leverage to estimate the projective parameters of the homography reliably. As a result, small tracking errors introduced by Lucas--Kanade optical flow may cause large distortions in the projected object pose.
+
+Furthermore, the RANSAC estimation process becomes highly sensitive to outliers when only a small number of correspondences are available. Minor drift in a few feature points may cause the inlier consensus to fail, resulting in intermittent tracking loss or large pose fluctuations. These limitations motivate the geometry-aware refinement stage introduced in the following section.

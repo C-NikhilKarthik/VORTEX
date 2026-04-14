@@ -1,0 +1,176 @@
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[x=1cm, y=1cm]
+
+  %% ══════════════════════════════════════════════════════════════
+  %%  TOP PIPELINE (3 Vertical Rows)
+  %% ══════════════════════════════════════════════════════════════
+  
+  \begin{scope}[node distance=1.0cm]
+      %% ROW 2: The 4 SIMD-accelerated steps (Placed first for central anchoring)
+      \node[simdhw] (GS) at (0,0) {Grayscale\\[-2pt]\tiny\itshape NEON/SSE2};
+      \node[simdhw, right=of GS] (KP) {FAST Keypoints\\[-2pt]\tiny\itshape NEON/SSE4};
+      \node[simdhw, right=of KP] (DESC) {Binary Descriptors\\[-2pt]\tiny\itshape NEON/AVX2};
+      \node[simdnode, right=of DESC] (MATCH) {Hamming Match\\[-2pt]\tiny\itshape popcount/VCNT};
+
+      %% ROW 1: Camera Frame (Aligned directly above Grayscale)
+      \node[bbnodeD, above=2.0cm of GS] (IN) {Camera Frame};
+
+      %% ROW 3: Homography (Aligned directly below Match)
+      \node[bbnodeD, below=2.0cm of MATCH] (POSE) {Homography /\\[-2pt]Optical Flow};
+  \end{scope}
+
+  %% Connections
+  % Downward arrow into pipeline
+  \draw[fwB, line width=1.2pt, color=bbdark] (IN.south) -- (GS.north);
+      
+  % Horizontal SIMD internal arrows
+  \draw[fwB] (GS.east) -- (KP.west);
+  \draw[fwB] (KP.east) -- (DESC.west);
+  \draw[fwB] (DESC.east) -- (MATCH.west);
+  
+  % Downward arrow out of pipeline
+  \draw[fwB, line width=1.2pt, color=bbdark] (MATCH.south) -- (POSE.north);
+
+  %% Brace below pipeline
+  \draw[decorate, decoration={brace,amplitude=5pt,mirror}, simdborder, line width=0.7pt]
+      ($(GS.south west)+(0,-0.2)$) -- ($(MATCH.south east)+(0,-0.2)$)
+      node[midway, below=6pt, font=\scriptsize\sffamily, text=simdborder]
+          {SIMD-accelerated stages \ (OpenCV NEON / SSE / AVX intrinsics)};
+
+  %% ══════════════════════════════════════════════════════════════
+  %%  BOTTOM PANEL (Distributed to Full Width)
+  %% ══════════════════════════════════════════════════════════════
+  
+  \begin{scope}[shift={($(GS.south west) + (0, -4.5cm)$)}]
+      
+      % Panel Title
+      \node[font=\footnotesize\sffamily\bfseries, text=bbdark!80, anchor=north west] 
+          (ILL_TITLE) at (-0.5, 0.5) {How SIMD parallelises pixel processing};
+
+      %% --- SECTION 1: SCALAR PANEL (Left) ---
+      \begin{scope}[shift={(0, -1)}]
+          \node[font=\tiny\sffamily\bfseries, text=bbdark, anchor=south west] 
+              at (0, 0.25) {Scalar --- 1 pixel / cycle};
+          
+          \foreach \row/\actcol in {0/0, 1/1, 2/2, 3/3} {
+              \foreach \col in {0,...,7} {
+                  \ifnum\col=\actcol
+                      \fill[bbdark!75] (\col*0.48, -\row*0.38) rectangle +(0.44,0.30);
+                  \else
+                      \fill[scalarclr,draw=bbborder!50,line width=0.2pt] (\col*0.48, -\row*0.38) rectangle +(0.44,0.30);
+                  \fi
+              }
+              \node[font=\tiny\sffamily,text=bbdark,anchor=west] 
+                  at (8*0.48, -\row*0.38 + 0.15) {cycle \number\numexpr\row+1\relax};
+          }
+          \node[font=\tiny\sffamily\itshape,text=bbdark!65,anchor=north] 
+              at (1.8, -1.15) {\ldots\ 8 cycles total for 8 pixels};
+      \end{scope}
+
+      %% --- ARROW 1 (Vectorise) ---
+      \draw[-{Stealth[length=8pt,width=7pt]}, line width=1.4pt, simdborder]
+          (5.0, -1.6) -- (6.8, -1.6)
+          node[midway, above, font=\tiny\sffamily\bfseries, text=simdborder] {vectorise};
+
+      %% --- SECTION 2: VECTOR PANEL (Center) ---
+      \begin{scope}[shift={(7.0, -1)}]
+          \node[font=\tiny\sffamily\bfseries, text=simdborder, anchor=south west] 
+              at (0, 0.3) {SIMD Vector --- 8 pixels / cycle};
+          
+          \foreach \col in {0,...,7} {
+              \fill[vectorclr,draw=simdborder!50,line width=0.3pt] (\col*0.48, 0) rectangle +(0.44,0.30);
+              \node[font=\tiny\sffamily\bfseries,text=simdborder!85!black] 
+                  at (\col*0.48 + 0.22, 0.15) {\number\numexpr\col+1\relax};
+          }
+          \node[font=\tiny\sffamily,text=simdborder,anchor=west] 
+              at (8*0.48, 0.15) {cycle 1 only!};
+
+          %% Register outline
+          \draw[simdborder!70, line width=0.6pt, rounded corners=2pt]
+              (-0.05, -0.05) rectangle (8*0.48-0.05, 0.35);
+          \node[font=\tiny\sffamily\bfseries,text=simdborder!75,anchor=north]
+              at (1.9, -0.1) {128-bit NEON / 256-bit AVX register};
+
+          %% Speedup badge
+          \node[draw=simdborder, fill=simdblue!20, rounded corners=4pt,
+                font=\normalsize\sffamily, text=simdborder, inner sep=5pt]
+              at (1.9, -0.8) {$\times 4$--$8\times$ faster};
+
+          \node[font=\tiny\sffamily\itshape, text=simdborder!70, anchor=north]
+              at (1.9, -1.2) {all 8 pixels processed in a single instruction};
+      \end{scope}
+
+      %% --- ARROW 2 (Dispatch) ---
+      \draw[-{Stealth[length=8pt,width=7pt]}, line width=1.4pt, simdborder]
+          (11.0, -1.6) -- (13.8, -1.6)
+          node[midway, above, font=\tiny\sffamily\bfseries, text=simdborder] {executed on};
+
+      %% --- SECTION 3: CPU CHIP (Right) ---
+      \begin{scope}[shift={(14.0, -1.5)}]
+          \fill[simdblue!30, draw=simdborder, line width=1.0pt, rounded corners=4pt]
+              (0, 0) rectangle (1.8, 1.2);
+
+          %% CPU Cores
+          \foreach \x in {0.2, 0.7, 1.2} {
+              \foreach \y in {0.15, 0.5, 0.85} {
+                  \fill[vectorclr,draw=simdborder!40,line width=0.25pt] 
+                      (\x, \y) rectangle +(0.4,0.25);
+              }
+          }
+
+          %% Pins top/bottom
+          \foreach \px in {0.2, 0.48, 0.76, 1.04, 1.32, 1.6} {
+              \draw[simdborder,line width=0.6pt] (\px, 1.2) -- (\px, 1.35);
+              \draw[simdborder,line width=0.6pt] (\px, 0) -- (\px, -0.15);
+          }
+          %% Pins sides
+          \foreach \py in {0.15, 0.4, 0.65, 0.9} {
+              \draw[simdborder,line width=0.6pt] (0, \py) -- (-0.15, \py);
+              \draw[simdborder,line width=0.6pt] (1.8, \py) -- (1.95, \py);
+          }
+
+          \node[font=\scriptsize\sffamily\bfseries, text=simdborder]
+              at (0.9, -0.4) {ARM / x86 CPU};
+          \node[font=\tiny\sffamily\bfseries, text=simdborder!70]
+              at (0.9, -0.65) {NEON / SSE / AVX units};
+              
+          \node (CPU_ANCHOR) at (1.95, -0.65) {};
+      \end{scope}
+
+      %% Invisible bounding box anchors perfectly aligned with the top pipeline width
+      \coordinate (PANEL_LEFT) at (GS.west |- ILL_TITLE.north);
+      \coordinate (PANEL_RIGHT) at (MATCH.east |- CPU_ANCHOR);
+      \node (PANEL_BBOX) [fit=(PANEL_LEFT) (PANEL_RIGHT)] {};
+
+  \end{scope}
+
+  %% ══════════════════════════════════════════════════════════════
+  %%  BACKGROUND PANELS (Automatically sized)
+  %% ══════════════════════════════════════════════════════════════
+  \begin{pgfonlayer}{background}
+    %% Pipeline outer strip
+    \node[fill=bbgray!20, draw=bbborder!35, rounded corners=7pt,
+          inner sep=12pt, fit=(IN)(GS)(KP)(DESC)(MATCH)(POSE)] (pipelinepanel) {};
+
+    %% SIMD blue highlight over accelerated nodes
+    \node[fill=simdblue!20, draw=simdborder!30, rounded corners=6pt,
+          inner sep=9pt, fit=(GS)(KP)(DESC)(MATCH)] {};
+
+    %% Bottom Illustration panel
+    \node[fill=bbgray!20, draw=bbborder!25, rounded corners=6pt,
+          inner xsep=10pt, inner ysep=10pt, fit=(PANEL_BBOX)] {};
+  \end{pgfonlayer}
+
+\end{tikzpicture}%
+}
+\caption{CPU/SIMD pipeline configuration. Grayscale conversion, FAST keypoint
+detection, binary descriptor computation, and Hamming-distance matching are
+vectorised via SIMD intrinsics (ARM NEON on mobile, SSE4/AVX2 on desktop).
+The lower panel contrasts scalar execution---one pixel per cycle across 8
+cycles---with SIMD vector execution where a single 128-bit NEON or 256-bit
+AVX2 instruction processes all 8 pixels simultaneously, yielding
+$4$--$8\times$ throughput on these stages.}
+\label{fig:cpu}
+\end{figure}

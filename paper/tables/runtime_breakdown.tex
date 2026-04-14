@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\caption{Runtime breakdown (average). Multiscale matching is executed every 5 frames.}
+\label{tab:runtime_breakdown}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Stage} & \textbf{Cost (ms)} & \textbf{Execution Frequency} \\
+\midrule
+Grayscale + Resize                  & 3.8   & Every frame \\
+GPU Keypoint + Descriptor Compute   & 0.26  & Matching frames \\
+GPU $\rightarrow$ CPU Transfer      & 4.51  & Matching frames \\
+Multiscale Descriptor Matching      & 31.0  & Matching frames \\
+Lucas--Kanade (Forward--Backward)   & 7.3   & Tracking mode \\
+Depth Lifting + SE(3) Refinement    & 2.6   & Tracking mode \\
+\midrule
+Full Matching Frame                 & $\sim$39.6 & Every 5 frames \\
+Amortized Matching Cost             & $\sim$7.9  & Per-frame average \\
+Tracking Frame Total                & $\sim$14.0 & Continuous tracking \\
+\bottomrule
+\end{tabular}
+\end{table}

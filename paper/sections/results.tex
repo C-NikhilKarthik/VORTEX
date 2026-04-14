@@ -1,0 +1,13 @@
+\section{Results}
+
+\subsection{Runtime Performance}
+
+Table~\ref{tab:runtime} summarizes the runtime performance of the three pipeline configurations. The CPU-based pipeline achieves efficient performance for moderate image resolutions due to SIMD-accelerated descriptor matching. However, as camera resolution increases, the computational cost of feature detection, descriptor computation, and matching grows proportionally with the number of pixels. Even with SIMD acceleration, high-resolution inputs can lead to increased processing time and reduced frame rates.
+
+Conversely, reducing camera resolution improves computational performance but introduces limitations in feature quality. At lower resolutions, distant objects occupy fewer pixels in the image, resulting in blurred or weak feature descriptors that reduce matching reliability across scales.
+
+The GPU-based pipeline significantly accelerates feature extraction and descriptor computation by parallelizing these operations through shader programs. However, performance remains influenced by data transfer between GPU and CPU. In early implementations where feature matching was executed on the CPU, the full image had to be transferred back from GPU memory, resulting in transfer costs proportional to the image size ($H \times W \times C$).
+
+The introduction of GPU storage buffers reduces this overhead by transferring only the matched feature information instead of the entire image. Nevertheless, the transfer cost still depends on the number of feature matches retrieved from the GPU.
+
+Finally, the geometry-aware $\mathrm{SE}(3)$ pipeline introduces additional computation for rendering and pose optimization, but the improved stability reduces the need for frequent relocalization, resulting in more consistent tracking performance across frames.

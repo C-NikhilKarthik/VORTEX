@@ -1,0 +1,72 @@
+\documentclass{article}
+\usepackage{arxiv}
+
+% common packages and macros
+\input{macros/packages}
+\input{macros/tikz_styles}
+\input{macros/commands}
+
+\pgfdeclarelayer{backbackground}
+\pgfdeclarelayer{background}
+\pgfsetlayers{backbackground,background,main}
+
+\begin{document}
+
+\input{meta/title}
+\input{meta/authors}
+
+\maketitle
+
+\input{meta/abstract}
+
+% Introduction
+% Related Work
+% System Overview
+%   - CPU Algebric Pipeline
+%   - GPU Algebric Pipeline 
+%   - Geometry-Aware SE(3) Pipeline
+%
+% Algebric Pipeline 
+%   - preprocessing
+%   - keypoints detection
+%   - descriptors extraction
+%   - feature matching
+%   - motion estimation (Homography + LK)
+%
+% Hardware Aware Implementation
+%   - CPU
+%   - GPU
+%
+% Geometry-Aware SE(3) Tracking
+%   - Synthetic reference rendering
+%   - 2D-3D Lifting
+%   - SE(3) Pose Optimization
+%
+% Experimental Setup
+%   - Evaluation metrics
+%   - Baseline Systems
+%
+% Results
+%   - Runtime Performance
+%   - Tracking Stability
+%   - Edge device comparision
+%
+% Discussions
+% Conclusions
+% References
+
+
+\input{sections/intro}
+\input{sections/related}
+\input{sections/system-overview}
+\input{sections/algebric-pipeline}
+\input{sections/hardware-aware-implementation}
+\input{sections/geomtery-pipeline}
+\input{sections/experiments}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\bibliographystyle{unsrt}
+\bibliography{main}
+
+\end{document}

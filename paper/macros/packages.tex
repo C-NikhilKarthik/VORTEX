@@ -1,0 +1,25 @@
+% ── Common packages (all venues) ──────────────────────────────────────
+\usepackage[utf8]{inputenc} % Best to load inputenc early
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{orcidlink}      % Note: orcidlink loads hyperref automatically
+
+% TikZ and Libraries
+\usepackage{tikz}
+\usetikzlibrary{positioning, decorations.pathreplacing, calc, arrows.meta, fit, backgrounds}
+
+% \usepackage{styles/arxiv}
+% Include custom style file (Fixed from \usepackage{styles/arxiv})
+% Use \input if it is a .tex file, or move to root and use \usepackage{arxiv}
+% \input{styles/arxiv.sty} 
+
+% Hyperref setup (must be configured after packages that load hyperref)
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}

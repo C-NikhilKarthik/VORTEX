@@ -1,0 +1,105 @@
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+
+  %% ── Input ──────────────────────────────────────────────────────────────────
+  \node[bbnodeD] (IN) at (0,0) {Camera Frame};
+
+  %% ── Frontend: Feature Processing ───────────────────────────────────────────
+  \node[bbnode, right=1.6cm of IN] (GS)
+      {Grayscale\\[-2pt]\scriptsize\itshape single-channel $I$};
+
+  \node[bbnode, right=1.4cm of GS] (KP)
+      {FAST Keypoints\\[-2pt]\scriptsize\itshape corner response $>t$};
+
+  \node[bbnode, right=1.4cm of KP] (DESC)
+      {Binary Descriptors\\[-2pt]\scriptsize\itshape orientation $\to$ patch bits};
+
+  \node[bbnode, right=1.4cm of DESC] (MATCH)
+      {Hamming Match\\[-2pt]\scriptsize\itshape cross-frame correspondences};
+
+  %% Linear Flow Arrows with Data Labels
+  \draw[fw] (IN.east) -- (GS.west)
+      node[ann, midway, above] {RGB pixels};
+      
+  \draw[fw] (GS.east) -- (KP.west)
+      node[ann, midway, above] {intensity};
+      
+  \draw[fw] (KP.east) -- (DESC.west)
+      node[ann, midway, above] {2D corners};
+      
+  \draw[fw] (DESC.east) -- (MATCH.west)
+      node[ann, midway, above] {bit strings};
+
+  %% ── Backend: Motion Estimation (Symmetrical Split) ─────────────────────────
+  
+  % Position the top (Homography) and bottom (Optical Flow) symmetrically
+  \node[bbnode, right=1.8cm of MATCH, yshift=1.2cm] (HG)
+      {Homography\\[-2pt]\scriptsize\itshape RANSAC global align};
+
+  \node[bbnode, right=1.8cm of MATCH, yshift=-1.2cm] (OF)
+      {Optical Flow (LK)\\[-2pt]\scriptsize\itshape frame-to-frame update};
+
+  % Rounded split routing
+  \coordinate (split) at ($(MATCH.east) + (0.6, 0)$);
+  \draw[fw, rounded corners=5pt] (MATCH.east) -- (split) |- (HG.west)
+      node[ann, pos=0.75, above=1pt] {2D--2D pairs};
+  \draw[fw, rounded corners=5pt] (split) |- (OF.west)
+      node[ann, pos=0.75, below=1pt] {prev $\to$ curr};
+
+  %% ── Pose Output (Symmetrical Merge) ────────────────────────────────────────
+  
+  \coordinate (centerOut) at ($(HG.east)!0.5!(OF.east)$);
+  \node[bbnodeD, right=1.5cm of centerOut] (POSE)
+      {Pose Estimate\\[-2pt]\scriptsize\itshape $\mathbf{H}$ or $\mathbf{T}$};
+
+  % Rounded merge routing
+  \coordinate (mergeHG) at ($(HG.east) + (0.6, 0)$);
+  \coordinate (mergeOF) at ($(OF.east) + (0.6, 0)$);
+  
+  \draw[fw, rounded corners=5pt] (HG.east) -- (mergeHG) |- (POSE.west)
+      node[ann, pos=0.25, above=1pt] {inliers};
+  \draw[fw, rounded corners=5pt] (OF.east) -- (mergeOF) |- (POSE.west)
+      node[ann, pos=0.25, below=1pt] {inliers};
+
+  %% ── Background Panels ──────────────────────────────────────────────────────
+  \begin{pgfonlayer}{background}
+    
+    %% Frontend Box
+    \node[fill=bbfront, draw=bbborder!50, rounded corners=8pt,
+          inner xsep=12pt, inner ysep=16pt,
+          fit=(GS)(KP)(DESC)(MATCH)] (FRONT_BOX) {};
+    \node[font=\footnotesize\sffamily\bfseries, text=bbdark!80,
+          anchor=south west] at (FRONT_BOX.north west) {Frontend: Feature Processing};
+
+    %% Backend Box
+    \node[fill=bbback, draw=bbborder!70, rounded corners=8pt,
+          inner xsep=12pt, inner ysep=16pt,
+          fit=(HG)(OF)] (BACK_BOX) {};
+    \node[font=\footnotesize\sffamily\bfseries, text=bbdark!80,
+          anchor=south west] at (BACK_BOX.north west) {Backend: Motion Estimation};
+          
+  \end{pgfonlayer}
+  
+  %% Outer enclosing box (Optional, but ties it all together nicely)
+  \begin{pgfonlayer}{backbackground}
+    \node[fill=bbgray!20, draw=bbborder!30, rounded corners=10pt,
+          inner xsep=20pt, inner ysep=24pt,
+          fit=(IN)(FRONT_BOX)(BACK_BOX)(POSE)] (MAIN_BOX) {};
+    \node[font=\small\sffamily\bfseries, text=bbdark,
+          anchor=north west, xshift=10pt, yshift=-10pt] 
+          at (MAIN_BOX.north west) {Shared Feature Backbone};
+  \end{pgfonlayer}
+
+\end{tikzpicture}%
+}
+\caption{Shared feature extraction backbone common to all three system
+configurations. Incoming frames are converted to grayscale, processed through
+FAST-based keypoint detection, binary descriptor computation, and
+Hamming-distance matching. The architecture is cleanly divided into a frontend
+feature processing pipeline and a backend motion estimation solver, where
+correspondences feed either a homography solver (global alignment) or a
+Lucas--Kanade tracker (frame-to-frame update) to yield the final pose estimate.}
+\label{fig:backbone}
+\end{figure}
