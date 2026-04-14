@@ -1,4 +1,18 @@
 import { Github, Linkedin, ArrowRight } from 'lucide-react'
+import { motion } from 'motion/react'
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.15 }
+  }
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+}
 
 export default function Contributors() {
   const contributors = [
@@ -36,7 +50,10 @@ export default function Contributors() {
   return (
     <section className="py-32 bg-black relative border-t border-white/[0.05]" id="contributors">
       <div className="container mx-auto px-6 max-w-7xl">
-        <div className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
+        <motion.div 
+          initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={itemVariants}
+          className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8"
+        >
           <div>
             <h2 className="text-3xl md:text-5xl font-semibold tracking-tighter mb-6 text-white">
               The Engine Builders
@@ -50,11 +67,14 @@ export default function Contributors() {
             Read Full Paper
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </a>
-        </div>
+        </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <motion.div 
+          variants={containerVariants} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-10"
+        >
           {contributors.map((contributor, i) => (
-            <div key={i} className="linear-card p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8 noise-bg">
+            <motion.div variants={itemVariants} key={i} className="linear-card p-10 flex flex-col sm:flex-row items-center sm:items-start gap-8 noise-bg">
               
               <div className="relative z-10 w-24 h-24 shrink-0 rounded-full overflow-hidden border border-white/10">
                 <img 
@@ -84,9 +104,9 @@ export default function Contributors() {
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   )

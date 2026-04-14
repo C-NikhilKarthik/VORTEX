@@ -1,19 +1,31 @@
 import { Play } from 'lucide-react'
+import { motion } from 'motion/react'
 
 export default function Demo() {
+  const fadeInUp = { 
+    hidden: { opacity: 0, y: 40 }, 
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8 } } 
+  }
+
   return (
     <section className="py-32 bg-black relative border-t border-white/[0.05]" id="demo">
       <div className="container mx-auto px-6 max-w-7xl">
-        <div className="mb-20">
+        <motion.div 
+          variants={fadeInUp} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
+          className="mb-20"
+        >
           <h2 className="text-3xl md:text-5xl font-semibold tracking-tighter mb-6 text-white max-w-lg">
             Architecture in Action
           </h2>
           <p className="text-zinc-500 max-w-2xl text-lg leading-relaxed">
             Robust tracking geometry operating perfectly across varying environments without training payloads.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="linear-card p-3">
+        <motion.div 
+          variants={fadeInUp} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
+          className="linear-card p-3"
+        >
           <div className="relative aspect-[21/9] w-full rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 z-10">
             
             {/* Play Button Interface */}
@@ -36,7 +48,7 @@ export default function Demo() {
               className="w-full h-full object-cover opacity-60 grayscale scale-100 min-h-[400px]"
             />
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   )

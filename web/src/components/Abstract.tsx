@@ -1,20 +1,32 @@
+import { motion } from 'motion/react'
+
 export default function Abstract() {
+  const fadeInUp = { 
+    hidden: { opacity: 0, y: 40 }, 
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8 } } 
+  }
+
   return (
     <section className="py-32 bg-black relative border-t border-white/[0.05]" id="abstract">
       <div className="container mx-auto px-6 max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-12 items-start">
           
-          <div className="lg:col-span-4 lg:sticky lg:top-32">
+          <motion.div 
+            variants={fadeInUp} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
+            className="lg:col-span-4 lg:sticky lg:top-32"
+          >
              <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-white mb-3">
                The Abstract
              </h2>
              <p className="text-zinc-500 text-base leading-relaxed">
                A detailed overview of the computational tracking constraints on edge devices and the deployed VORTEX geometry solutions.
              </p>
-          </div>
+          </motion.div>
 
-          <div className="lg:col-span-8">
-            {/* Using the newly baked linear-card to inherit the glassy borders automatically */}
+          <motion.div 
+            variants={fadeInUp} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
+            className="lg:col-span-8"
+          >
             <div className="linear-card flex flex-col gap-4 p-8 md:p-14 noise-bg">
               <div className="relative z-10">
                 <h3 className="text-xl font-medium text-white mb-8">Real-time 6-DoF pose estimation</h3>
@@ -38,7 +50,7 @@ export default function Abstract() {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
         </div>
       </div>

@@ -1,9 +1,16 @@
 import { Github, Twitter, Mail } from 'lucide-react'
 import { VortexLogo } from './Navbar'
+import { motion } from 'motion/react'
 
 export default function Footer() {
   return (
-    <footer className="bg-black py-16 border-t border-white/[0.05]">
+    <motion.footer 
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.8 }}
+      className="bg-black py-16 border-t border-white/[0.05]"
+    >
       <div className="container mx-auto px-6 max-w-7xl flex flex-col md:flex-row justify-between items-start gap-12">
         <div>
           <div className="flex items-center gap-2.5 mb-4">
@@ -40,6 +47,6 @@ export default function Footer() {
           </div>
         </div>
       </div>
-    </footer>
+    </motion.footer>
   )
 }

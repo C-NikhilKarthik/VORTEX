@@ -1,3 +1,5 @@
+import { Analytics } from '@vercel/analytics/react';
+
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import Abstract from './components/Abstract'
@@ -9,16 +11,19 @@ import Footer from './components/Footer'
 
 function App() {
   return (
-    <main className="min-h-screen bg-black w-full selection:bg-white/20 selection:text-white flex flex-col">
-      <Navbar />
-      <Hero />
-      <Abstract />
-      <Benchmarking />
-      <Demo />
-      <Contributors />
-      <CallToAction />
-      <Footer />
-    </main>
+    <>
+      <main className="min-h-screen bg-black w-full selection:bg-white/20 selection:text-white flex flex-col">
+        <Navbar />
+        <Hero />
+        <Abstract />
+        <Benchmarking />
+        <Demo />
+        <Contributors />
+        <CallToAction />
+        <Footer />
+      </main>
+      <Analytics />
+    </>
   )
 }
 

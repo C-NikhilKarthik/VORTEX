@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'motion/react'
 
 export const VortexLogo = ({ className }: { className?: string }) => (
   <svg 
@@ -43,7 +44,10 @@ export default function Navbar() {
   }, [scrolled, lastScrollY])
 
   return (
-    <nav 
+    <motion.nav 
+      initial={{ y: -100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.8 }}
       className={`fixed left-0 w-full px-6 z-50 transition-all duration-500 ease-in-out flex items-center justify-between pointer-events-none ${
         visible ? 'top-6 opacity-100' : 'top-[-5rem] opacity-0'
       }`}
@@ -74,6 +78,6 @@ export default function Navbar() {
            Read Paper
          </a>
       </div>
-    </nav>
+    </motion.nav>
   )
 }

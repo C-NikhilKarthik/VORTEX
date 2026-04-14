@@ -1,5 +1,6 @@
 import { useRef, type MouseEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
+import { motion } from 'motion/react'
 
 export default function CallToAction() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -13,6 +14,11 @@ export default function CallToAction() {
     containerRef.current.style.setProperty('--pointer-x', `${x}px`)
     containerRef.current.style.setProperty('--pointer-y', `${y}px`)
   }
+  
+  const fadeInUp = { 
+    hidden: { opacity: 0, y: 40 }, 
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8 } } 
+  }
 
   return (
     <section className="mx-auto px-6 py-24 sm:py-32 relative w-full text-center sm:mb-0 sm:pb-0 overflow-hidden border-t border-white/[0.05]">
@@ -20,7 +26,10 @@ export default function CallToAction() {
       {/* Background radial glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-white/[0.03] blur-[100px] rounded-[100%]" />
 
-      <div className="relative z-10 max-w-7xl mx-auto">
+      <motion.div 
+        variants={fadeInUp} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
+        className="relative z-10 max-w-7xl mx-auto"
+      >
         <h2 className="text-[3.5rem] md:text-[5.5rem] tracking-tighter leading-[1.05] font-semibold text-transparent bg-clip-text bg-gradient-to-br from-white via-zinc-200 to-zinc-600 mb-6 drop-shadow-sm">
           Tracking reimagined.<br className="hidden md:block"/> Available today.
         </h2>
@@ -40,7 +49,7 @@ export default function CallToAction() {
              <ArrowRight className="w-4 h-4 ml-2 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-white" />
           </a>
         </div>
-      </div>
+      </motion.div>
 
       <div 
         ref={containerRef}
