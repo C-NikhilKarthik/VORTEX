@@ -2,12 +2,20 @@
 
 \subsection{Runtime Performance}
 
-Table~\ref{tab:runtime} summarizes the runtime performance of the three pipeline configurations. The CPU-based pipeline achieves efficient performance for moderate image resolutions due to SIMD-accelerated descriptor matching. However, as camera resolution increases, the computational cost of feature detection, descriptor computation, and matching grows proportionally with the number of pixels. Even with SIMD acceleration, high-resolution inputs can lead to increased processing time and reduced frame rates.
+Table~\ref{tab:runtime} summarizes the runtime performance of the three pipeline configurations.
 
-Conversely, reducing camera resolution improves computational performance but introduces limitations in feature quality. At lower resolutions, distant objects occupy fewer pixels in the image, resulting in blurred or weak feature descriptors that reduce matching reliability across scales.
+The CPU-based pipeline achieves efficient performance for moderate image resolutions due to SIMD-accelerated descriptor matching. However, as camera resolution increases, the computational cost of feature detection, descriptor computation, and matching scales approximately linearly with the number of pixels. Even with SIMD acceleration, high-resolution inputs result in increased processing time and reduced frame rates.
 
-The GPU-based pipeline significantly accelerates feature extraction and descriptor computation by parallelizing these operations through shader programs. However, performance remains influenced by data transfer between GPU and CPU. In early implementations where feature matching was executed on the CPU, the full image had to be transferred back from GPU memory, resulting in transfer costs proportional to the image size ($H \times W \times C$).
+Reducing the camera resolution improves computational performance but introduces limitations in feature quality. At lower resolutions, distant objects occupy fewer pixels, leading to weaker or blurred feature descriptors. This reduces matching reliability, particularly under scale changes, and can negatively impact tracking robustness.
 
-The introduction of GPU storage buffers reduces this overhead by transferring only the matched feature information instead of the entire image. Nevertheless, the transfer cost still depends on the number of feature matches retrieved from the GPU.
+The GPU-based pipeline significantly accelerates feature extraction and descriptor computation by exploiting massive parallelism through shader programs. However, its performance is influenced by data transfer overhead between GPU and CPU. In early implementations, where feature matching was performed on the CPU, the full image had to be transferred back from GPU memory, resulting in transfer costs proportional to image size ($H \times W \times C$).
 
-Finally, the geometry-aware $\mathrm{SE}(3)$ pipeline introduces additional computation for rendering and pose optimization, but the improved stability reduces the need for frequent relocalization, resulting in more consistent tracking performance across frames.
+The introduction of GPU storage buffers reduces this overhead by transferring only compact feature representations rather than full image data. Nevertheless, the transfer cost remains dependent on the number of matched features, introducing variability based on scene complexity.
+
+The geometry-aware $\mathrm{SE}(3)$ pipeline introduces additional computation due to synthetic rendering and iterative pose optimization. In particular, the tension-based weighted Gauss--Newton refinement requires the evaluation of Jacobians and the solution of a small linear system per iteration:
+\[
+(\mathbf{J}^\top \mathbf{W} \mathbf{J})\,\boldsymbol{\delta}
+=
+\mathbf{J}^\top \mathbf{W} \mathbf{e}.
+\]
+While this increases per-frame computation, the improved robustness reduces tracking drift and the frequency of global reinitialization. As a result, the overall system achieves more stable frame-to-frame performance and avoids costly relocalization cycles, leading to improved effective runtime consistency.

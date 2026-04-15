@@ -1,8 +1,8 @@
 \section{Experimental Setup}
 
-To evaluate the proposed tracking framework, we conducted experiments on Android-based mobile devices using a native application pipeline. The experiments compare three system configurations: (i) a CPU-based algebraic tracking pipeline, (ii) a GPU-accelerated feature processing pipeline, and (iii) the proposed geometry-aware $\mathrm{SE}(3)$ render-and-track pipeline.
+To evaluate the proposed tracking framework, we conducted experiments on Android-based mobile devices using a native application pipeline. The evaluation considers three system configurations: (i) a CPU-based algebraic tracking pipeline, (ii) a GPU-accelerated feature processing pipeline, and (iii) the proposed geometry-aware $\mathrm{SE}(3)$ render-and-track pipeline with tension-based pose refinement.
 
-All experiments were performed using real-time camera input under varying conditions of viewpoint, scale, and partial visibility. The goal of the evaluation is to analyze both computational performance and tracking robustness under realistic edge-device constraints.
+All experiments were performed using real-time camera input under varying conditions of viewpoint, scale, and partial visibility. The objective is to analyze both computational performance and tracking robustness under realistic constraints encountered on mobile and edge devices.
 
 \subsection{Evaluation Metrics}
 
@@ -10,14 +10,14 @@ The evaluation focuses on the following metrics:
 
 \begin{itemize}
     \item \textbf{Runtime performance:} Average processing time per frame and achieved frames per second (FPS).
-    \item \textbf{Tracking stability:} Visual stability of the estimated pose under viewpoint changes and partial visibility.
-    \item \textbf{Tracking accuracy:} Consistency of the estimated pose across consecutive frames.
+    \item \textbf{Tracking stability:} Visual consistency of the estimated pose under viewpoint changes and partial visibility.
+    \item \textbf{Tracking accuracy:} Temporal consistency of the estimated pose across consecutive frames.
     \item \textbf{System footprint:} Computational load and memory transfer overhead between CPU and GPU.
 \end{itemize}
 
 \subsection{Hardware Profiling: CPU vs. GPU}
 
-Table~\ref{tab:profiling} and Figure~\ref{fig:profiling_chart} detail the performance differences between the SIMD-accelerated CPU pipeline and the GPU compute shader pipeline. GPU timings are derived from on-device measurements collected across 345 profiled frames on the Android tracking application (mean keypoint count: $\approx$360).
+Table~\ref{tab:profiling} and Figure~\ref{fig:profiling_chart} summarize the performance characteristics of the SIMD-accelerated CPU pipeline and the GPU compute shader pipeline. GPU timings are obtained from on-device measurements collected across 345 frames (mean keypoint count: $\approx$360).
 
 \begin{table}[htbp]
 \centering
@@ -122,10 +122,10 @@ Hamming Matching          & 3.0 ms  & ---      & ---          \\
 \label{fig:profiling_chart}
 \end{figure}
 
-As shown, the GPU implementation provides substantial acceleration for dense operations. However, to maintain high overall throughput, the pipeline architecture must successfully amortize the $1.7$\,ms total round-trip memory transfer overhead introduced by the PCIe bus.
- 
-To further characterize the pipeline under real device conditions, Table~\ref{tab:android_profiling} presents measured per-stage timings collected directly from the Android tracking application across 345 frames. Frames are stratified into two operating modes: the \emph{detection phase}, in which the system searches for the target marker (93 frames, mean $\approx$\,227 keypoints), and the \emph{tracked phase}, in which stable pose estimation is maintained (252 frames, mean $\approx$\,409 keypoints).
- 
+As shown, the GPU implementation significantly accelerates dense, data-parallel stages such as keypoint detection and descriptor computation. However, achieving high overall throughput requires careful management of memory transfers, particularly the $1.7$\,ms round-trip latency associated with GPU--CPU communication.
+
+To further characterize performance under real deployment conditions, Table~\ref{tab:android_profiling} reports per-stage timings measured directly on the Android application across 345 frames. The dataset is divided into two operational regimes: a \emph{detection phase}, where the system searches for the target (93 frames, mean $\approx$227 keypoints), and a \emph{tracked phase}, where pose estimation is stable (252 frames, mean $\approx$409 keypoints).
+
 \begin{table}[htbp]
 \centering
 \caption{On-device measured per-stage timing (mean, ms) for the Android feature extraction pipeline across 345 profiled frames. The detection phase operates on a lower keypoint count ($\approx$227) than the tracked phase ($\approx$409), explaining the approximately $1.9\times$ increase in NMS and descriptor cost during active tracking.}
@@ -148,13 +148,13 @@ Descriptor Extraction    & 2.97 ms & 4.60 ms  & $1.5\times$ \\
 \end{tabular}
 \end{table}
 
-The measured data reveals that Non-Maximum Suppression is the dominant bottleneck in the GPU pipeline, accounting for $56.1$\,\% of total measured processing time. This cost scales with keypoint count: across the 345 profiled frames, NMS averaged $7.58$\,ms during the detection phase ($\approx$227 keypoints) and $14.19$\,ms during the tracked phase ($\approx$409 keypoints). Per-pixel stages such as Grayscale Conversion ($1.40$\,ms) and frame upload ($0.14$\,ms) remain stable across both modes, confirming that the GPU excels at data-parallel operations but that the variable-length keypoint list processed by NMS and descriptor extraction introduces frame-rate variability.
+The results indicate that Non-Maximum Suppression (NMS) is the dominant computational bottleneck, accounting for $56.1$\,\% of total processing time. Its cost scales with the number of detected keypoints, increasing from $7.58$\,ms in the detection phase to $14.19$\,ms in the tracked phase. In contrast, per-pixel operations such as grayscale conversion and frame upload remain relatively constant, highlighting the efficiency of GPU parallelization for dense operations while exposing variability introduced by feature-dependent stages.
 
 \subsection{Baseline Systems and Ablation Study}
 
-The proposed pipelines are compared against two baselines: the purely CPU-based algebraic pipeline (using homography estimation) and ARCore's native image tracking capability, which provides marker-based pose estimation within the Android AR ecosystem.
+The proposed pipelines are compared against two baselines: a CPU-based algebraic pipeline using homography estimation, and ARCore’s native image tracking system.
 
-To better understand the contribution of individual components, we perform an ablation study evaluating several variants of our pipeline. Table~\ref{tab:ablation} quantifies the impact of geometric refinement and computational optimizations on both runtime performance and tracking stability.
+To isolate the contribution of each component, we perform an ablation study across multiple pipeline variants. The results are summarized in Table~\ref{tab:ablation}.
 
 \begin{table}[htbp]
 \centering
@@ -177,4 +177,33 @@ GPU Geometry-Aware (No LK flow) & 42.1 & 1.45 & 1.10 \\
 \end{tabular}
 \end{table}
 
-These experiments reveal that while purely algebraic GPU pipelines achieve the highest frame rates, the inclusion of the 2D--3D lifting and $\mathrm{SE}(3)$ Gauss--Newton refinement drastically reduces spatial jitter and rotational drift, ultimately outperforming standard mobile AR baselines.
+\paragraph{Effect of Geometry-Aware Optimization.}
+
+The ablation results demonstrate a clear trade-off between computational efficiency and geometric accuracy. Purely algebraic pipelines achieve the highest frame rates but exhibit significantly larger translation and rotation errors. Incorporating 2D--3D correspondence lifting and $\mathrm{SE}(3)$ optimization substantially improves pose stability, reducing both spatial jitter and rotational drift.
+
+\paragraph{Tension-Based Refinement.}
+
+Within the geometry-aware pipeline, pose refinement is performed using a tension-based weighted Gauss--Newton formulation. Given reprojection residuals:
+\[
+\mathbf{e}_i = \mathbf{x}_i - \pi(\mathbf{K}\mathbf{T}\mathbf{X}_i), \quad d_i = \|\mathbf{e}_i\|,
+\]
+the minimum residual
+\[
+L = \min_i d_i
+\]
+defines a reference equilibrium. Correspondences are assigned adaptive weights:
+\[
+w_i = \frac{d_i - L}{d_i}.
+\]
+
+The resulting update is computed as:
+\[
+(\mathbf{J}^\top \mathbf{W} \mathbf{J})\,\boldsymbol{\delta}
+=
+\mathbf{J}^\top \mathbf{W} \mathbf{e}, \quad
+\mathbf{T} \leftarrow \exp(\boldsymbol{\delta}^\wedge)\mathbf{T}.
+\]
+
+This adaptive weighting scheme emphasizes inconsistent correspondences while suppressing already well-aligned matches, improving robustness without requiring manually tuned robust loss functions.
+
+Overall, the results show that while algebraic GPU pipelines maximize raw throughput, the inclusion of geometry-aware refinement—particularly with adaptive tension-based weighting—provides significantly improved tracking stability and accuracy, outperforming both algebraic baselines and standard mobile AR tracking solutions.

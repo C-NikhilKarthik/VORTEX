@@ -1,32 +1,36 @@
 \section{Hardware-Aware Implementations}
 
-To achieve real-time performance on mobile-class and edge devices, the proposed system incorporates hardware-aware optimizations tailored for both CPU and GPU execution. While the underlying algebraic formulation of the tracking pipeline remains identical across implementations, the computational stages are explicitly organized to exploit the architectural strengths---and mitigate the bottlenecks---of each processing unit.
+To achieve real-time performance on mobile and edge devices, the proposed system incorporates hardware-aware optimizations tailored for both CPU and GPU execution. While the underlying algebraic formulation remains consistent across implementations, computational stages are reorganized to exploit the architectural strengths—and mitigate the bottlenecks—of each processing unit.
 
 \subsection{CPU Implementation}
 
 \input{figures/cpu}
 
-The CPU-based pipeline is designed to minimize memory access latency and maximize instruction-level parallelism. Image frames are acquired directly from the native camera interface, allowing the system to operate on CPU-resident memory buffers. This zero-copy design avoids the synchronization and transfer overhead associated with passing high-resolution frames to a coprocessor.
+The CPU-based pipeline is designed to minimize memory latency and maximize instruction-level parallelism. Image frames are acquired directly from the native camera interface, enabling operation on CPU-resident buffers and avoiding costly data transfers. This zero-copy design eliminates synchronization overhead associated with GPU offloading.
 
-As illustrated in Figure~\ref{fig:cpu}, the most computationally dense stages of the pipeline---grayscale conversion, FAST keypoint extraction, binary descriptor generation, and Hamming-distance matching---are aggressively accelerated using Single Instruction, Multiple Data (SIMD) vectorization. By leveraging 128-bit ARM NEON intrinsics on mobile processors (or 256-bit AVX2 on desktop architectures), the pipeline transitions from a scalar execution model (one pixel per cycle) to a vectorized model that processes up to 8 pixels simultaneously. 
+As illustrated in Figure~\ref{fig:cpu}, the most computationally intensive stages—grayscale conversion, FAST keypoint detection, binary descriptor construction, and Hamming-distance matching—are accelerated using Single Instruction, Multiple Data (SIMD) vectorization. By leveraging 128-bit ARM NEON intrinsics on mobile processors (or 256-bit AVX2 on desktop architectures), the pipeline transitions from scalar processing to vectorized execution, enabling multiple pixels to be processed per cycle.
 
-Binary descriptor matching maps particularly well to this architecture; comparisons are performed using vectorized bitwise XOR operations followed by hardware population-count (\texttt{popcount} / \texttt{VCNT}) instructions. Combined with compiler-assisted auto-vectorization and cache-line-aligned memory layouts, this SIMD approach yields a $4\times$ to $8\times$ throughput improvement for feature processing. Once correspondences are established, frame-to-frame motion estimation (via RANSAC homography and Lucas--Kanade optical flow) is computed sequentially. These iterative, branch-heavy stages remain highly efficient on the CPU due to its superior branch prediction and low-latency cache hierarchy.
+Binary descriptor matching is particularly well-suited to SIMD execution. Descriptor comparisons are implemented using vectorized bitwise XOR operations followed by hardware population-count instructions (e.g., \texttt{VCNT} or \texttt{popcount}). Combined with cache-aligned memory layouts and compiler-assisted auto-vectorization, this approach yields a $4\times$–$8\times$ improvement in feature processing throughput.
+
+Once correspondences are established, motion estimation—via RANSAC-based homography estimation and pyramidal Lucas--Kanade optical flow—is executed on the CPU. These stages involve iterative and branch-heavy computations, which benefit from the CPU's low-latency cache hierarchy and efficient branch prediction.
 
 \subsection{GPU Implementation}
 
 \input{figures/gpu}
 
-The GPU implementation offloads feature extraction and matching to programmable graphics pipelines, trading the CPU's low-latency sequential execution for massive throughput via parallel shader multiprocessors. 
+The GPU implementation offloads feature extraction and descriptor matching to programmable shader pipelines, trading low-latency sequential execution for high-throughput parallel processing.
 
-As detailed in Figure~\ref{fig:gpu}, a critical architectural constraint in GPU offloading is the memory transfer bottleneck. To minimize PCIe bus overhead, the native high-resolution camera feed is uploaded to GPU Video RAM (VRAM) exactly once per frame. All subsequent feature processing is implemented as a sequence of GLSL/Metal compute shaders operating via a ping-pong buffering strategy. This keeps the high-bandwidth intermediate data strictly on the GPU. The parallelized stages include:
+As shown in Figure~\ref{fig:gpu}, a key challenge in GPU acceleration is minimizing memory transfer overhead. To address this, the camera frame is uploaded to GPU memory once per frame, after which all intermediate processing is performed entirely on the GPU using a sequence of GLSL or Metal shaders with ping-pong buffering. This design ensures that high-bandwidth intermediate data remains in GPU memory.
+
+The GPU pipeline parallelizes the following stages:
 
 \begin{itemize}
-    \item \textbf{Grayscale Conversion \& Smoothing:} A fragment shader pass that prepares the raw texture.
-    \item \textbf{Keypoint Detection \& NMS:} Highly parallelized local contrast checks to isolate FAST corners.
-    \item \textbf{Descriptor Extraction:} Memory-coalesced texture sampling to build binary strings.
-    \item \textbf{Parallel Matching:} A compute kernel utilizing a \textit{thread-per-descriptor} execution model, where thousands of GPU threads simultaneously compute Hamming distances across the query and train sets.
+    \item \textbf{Grayscale Conversion and Smoothing:} Implemented as a fragment shader pass.
+    \item \textbf{Keypoint Detection and NMS:} Parallel evaluation of local intensity contrasts for FAST corner detection.
+    \item \textbf{Descriptor Extraction:} Efficient texture sampling to construct binary descriptors.
+    \item \textbf{Parallel Matching:} A compute shader employing a thread-per-descriptor model, where thousands of threads simultaneously compute Hamming distances across descriptor sets.
 \end{itemize}
 
-While the GPU excels at this independent, pixel-wise processing, iterative algorithms like RANSAC homography estimation and pyramidal Lucas--Kanade tracking suffer on GPU architectures due to control-flow divergence and thread-group synchronization costs. Therefore, the pipeline employs a hybrid execution model: the massive parallelism of the GPU reduces the dense image into a sparse set of matches, and only this highly compact data structure is read back across the PCIe bus to CPU RAM. The CPU then efficiently handles the complex, branching logic of the final motion estimation.
+While GPUs excel at data-parallel operations, iterative algorithms such as RANSAC and pyramidal Lucas--Kanade tracking suffer from control-flow divergence and synchronization overhead. Consequently, the system adopts a hybrid execution strategy: the GPU reduces dense image data into a compact set of correspondences, which are then transferred back to the CPU. The CPU subsequently performs motion estimation using its efficient control-flow handling.
 
-Together, these two hardware-aware paths allow the system to dynamically select the optimal execution strategy based on the host device's available compute tier, balancing CPU SIMD efficiency against massive GPU parallelism while maintaining strict real-time guarantees.
+Together, these hardware-aware implementations enable the system to adapt to the available compute resources, balancing SIMD-optimized CPU execution with massively parallel GPU processing. This hybrid design ensures efficient feature processing while maintaining real-time performance across a range of mobile and embedded platforms.

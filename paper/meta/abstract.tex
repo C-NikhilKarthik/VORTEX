@@ -1,20 +1,19 @@
 \begin{abstract}
-Real-time 6-DoF pose estimation on mobile and embedded platforms is constrained by both computational limitations and geometric robustness requirements. Dense SLAM pipelines and learned pose regression models typically require substantial compute and memory resources, making them difficult to deploy efficiently on edge devices. Classical feature-based tracking offers a lightweight alternative, but most existing implementations rely on purely algebraic point-matching formulations—such as homography estimation—that lack explicit 3D geometric constraints and often become unstable under viewpoint changes, scale variation, or partial visibility.
+Real-time 6-DoF pose estimation on mobile and embedded platforms is constrained by limited computational resources and the need for geometric robustness. While dense SLAM systems and learned pose regression models provide high accuracy, they are often impractical for edge deployment. Classical feature-based tracking offers a lightweight alternative but relies on algebraic formulations, such as homography estimation, that lack explicit 3D constraints and degrade under viewpoint changes, scale variation, and partial visibility.
 
-In this work, we present VORTEX, a hardware-aware and geometry-aware tracking framework designed specifically for edge devices. We first redesign the foundational algebraic tracking stages through two optimized implementations: a CPU pipeline leveraging SIMD vectorization and a GPU-resident feature pipeline using custom fragment and compute shaders for keypoint detection, descriptor extraction, and parallel descriptor matching. Building on this accelerated feature backbone, we introduce a render-and-track formulation on the SE(3) manifold that incorporates explicit object geometry through synthetic reference rendering and direct 2D–3D correspondence lifting.
+We present \textbf{\textit{VORTEX}} (Visual Object Rendering and Tracking Engine for Cross-Platform), a hardware- and geometry-aware tracking framework designed for edge devices. The system combines a SIMD-optimized CPU pipeline with a GPU-accelerated feature pipeline for efficient keypoint detection, descriptor extraction, and matching. Building on this, we introduce a render-and-track formulation on the $\mathrm{SE}(3)$ manifold, enabling direct 2D--3D correspondence lifting through synthetic reference rendering.
 
-To further improve optimization stability, we propose a physics-inspired formulation for SE(3) pose estimation. Instead of directly minimizing reprojection error, each 2D–3D correspondence is modeled as a virtual spring, where the smallest residual defines a natural length and adaptive tension forces guide the optimization. This results in a weighted Gauss–Newton update that emphasizes geometrically consistent correspondences while suppressing outliers and local degeneracies. The formulation provides improved convergence behavior and robustness under partial visibility and non-uniform feature distributions.
+To improve stability, we propose a physics-inspired pose refinement method in which correspondences are modeled as virtual springs. Residual magnitudes define adaptive weights, yielding a weighted Gauss--Newton update that suppresses outliers and improves convergence under partial visibility and non-uniform feature distributions.
 
-Experiments on Android-based mobile hardware demonstrate that while GPU-accelerated algebraic tracking improves computational throughput, the proposed geometry-aware SE(3) refinement with tension-based optimization significantly enhances pose stability and robustness for real-time 6-DoF object tracking without persistent mapping.
-
+Experiments on Android devices demonstrate that while GPU acceleration improves throughput, the proposed geometry-aware refinement significantly enhances pose stability and robustness for real-time 6-DoF tracking without persistent mapping.
 \end{abstract}
 
 \keywords{
 6-DoF pose estimation \and
-Edge-aware vision systems \and
-Hardware-aware computer vision \and
+Edge computing \and
+Hardware-aware vision \and
 GPU-accelerated feature tracking \and
-Render-and-track methods \and
+Render-and-track \and
 SE(3) pose optimization \and
 Mobile augmented reality
 }

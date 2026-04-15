@@ -2,26 +2,36 @@
 
 \subsection{CPU Pipeline Limitations}
 
-The CPU-based pipeline demonstrates strong efficiency for moderate input resolutions but becomes increasingly limited as image resolution grows. Since feature detection and descriptor extraction scale with the number of image pixels, higher resolutions introduce substantial computational overhead even when SIMD vectorization is utilized. Additionally, lowering the camera resolution to improve runtime performance introduces challenges in feature matching, particularly for objects observed at larger distances. Reduced spatial detail results in weaker descriptors and decreased robustness under multiscale matching scenarios.
+The CPU-based pipeline demonstrates strong efficiency at moderate input resolutions but becomes increasingly constrained as image resolution grows. Since feature detection and descriptor extraction scale with the number of pixels, higher resolutions introduce significant computational overhead even with SIMD vectorization. 
+
+Reducing camera resolution improves runtime performance but introduces trade-offs in feature quality. At lower resolutions, distant objects occupy fewer pixels, leading to weaker or less distinctive descriptors. This reduces matching reliability, particularly under multiscale conditions, and can negatively impact tracking robustness.
 
 \subsection{GPU Pipeline Trade-offs}
 
-The GPU-accelerated pipeline alleviates many of the computational bottlenecks associated with feature extraction and descriptor computation. However, GPU performance remains dependent on memory transfer costs and overall GPU availability. Although storage buffers significantly reduce data transfer overhead compared to transferring full image buffers, the cost of transferring match data still scales with the number of correspondences retrieved.
+The GPU-accelerated pipeline alleviates many of the computational bottlenecks associated with feature extraction and descriptor computation by exploiting data-parallel execution. However, its performance remains dependent on memory transfer costs and overall GPU availability.
 
-Furthermore, GPU performance may vary depending on system conditions. On mobile platforms, the GPU is often shared with other rendering or application processes, which can introduce scheduling variability and reduce the effective computational resources available for feature processing.
+Although the use of storage buffers significantly reduces data transfer overhead compared to transferring full image buffers, the cost of transferring match data still scales with the number of correspondences. As a result, scene complexity directly influences runtime performance.
+
+Additionally, GPU performance on mobile platforms is subject to system-level constraints. Since the GPU is often shared with rendering and other application processes, scheduling variability and resource contention can reduce the effective throughput available for feature processing.
 
 \subsection{Geometric Tracking Advantages}
 
-The proposed $\mathrm{SE}(3)$ render-and-track formulation addresses several limitations of purely algebraic pipelines. By incorporating explicit geometric constraints derived from the object model, the system maintains stable pose estimates even under partial visibility and large viewpoint changes. The availability of object-space coordinates during rendering enables direct 2D--3D correspondence lifting, reducing the sensitivity of pose estimation to clustered feature distributions that commonly destabilize homography-based tracking.
+The proposed $\mathrm{SE}(3)$ render-and-track formulation addresses several limitations of purely algebraic pipelines by incorporating explicit geometric constraints derived from the object model. The availability of object-space coordinates during rendering enables direct lifting of image correspondences to 2D--3D constraints, reducing sensitivity to clustered or spatially limited feature distributions.
+
+Furthermore, the tension-based refinement introduces adaptive correspondence weighting within the optimization process. By assigning weights based on relative residual magnitudes, the system emphasizes inconsistent correspondences while suppressing those already in agreement. This results in improved robustness under partial visibility, noise, and viewpoint changes, without requiring manually tuned robust loss functions.
 
 \subsection{Comparison with ARCore}
 
-ARCore provides a highly optimized mobile tracking framework with built-in image tracking capabilities. While ARCore achieves strong performance for marker-based tracking scenarios, it operates as a closed system with limited control over the internal tracking pipeline. In practice, ARCore's tracking performance may degrade under strong viewpoint changes or partial occlusions depending on the visual properties of the tracked image.
+ARCore provides a highly optimized mobile tracking framework with built-in image tracking capabilities \cite{arcore}. While it achieves strong performance in marker-based scenarios, it operates as a closed system with limited control over the underlying tracking pipeline. Consequently, its performance may degrade under strong viewpoint changes or partial occlusions, depending on the visual properties of the tracked image.
 
-In contrast, the proposed system provides explicit control over the tracking pipeline and allows the integration of geometry-aware constraints through render-and-track optimization. This flexibility enables improved stability in scenarios where purely appearance-based tracking methods struggle.
+In contrast, the proposed system offers explicit control over all stages of the tracking pipeline and enables the integration of geometry-aware constraints through render-and-track optimization. This flexibility allows the system to maintain stable pose estimates in scenarios where purely appearance-based tracking methods struggle.
 
 \subsection{Future Work}
 
-While the proposed framework focuses on feature-based tracking using keypoint correspondences, an interesting direction for future work is the integration of silhouette-based tracking methods. Keypoint-based pipelines rely heavily on the availability of distinctive image features, which may become sparse under low-texture conditions, motion blur, or significant scale variations. Silhouette-based tracking, which relies on aligning object contours or projected model boundaries with observed image edges, can provide complementary geometric constraints that are less dependent on local texture.
+While the proposed framework focuses on feature-based tracking using keypoint correspondences, several extensions remain possible. One promising direction is the integration of silhouette-based tracking methods. Keypoint-based approaches rely on the presence of distinctive local features, which may become sparse under low-texture conditions, motion blur, or significant scale variation.
 
-In particular, combining the current feature-based pipeline with silhouette alignment could improve robustness in scenarios where keypoint detection becomes unreliable. Such an approach would leverage the known object geometry to match projected object boundaries against image gradients, potentially providing stronger pose constraints under partial visibility or low-texture surfaces. Investigating the integration of silhouette-based alignment within the proposed render-and-track framework remains an important direction for future research.
+Silhouette-based tracking, which aligns projected object contours with observed image edges, can provide complementary geometric constraints that are less dependent on texture. Incorporating silhouette alignment within the render-and-track framework could improve robustness in challenging scenarios, particularly under partial visibility or low-texture surfaces.
+
+Another direction for future work is the exploration of hybrid optimization strategies that combine feature-based residuals with additional geometric cues. Extending the tension-based formulation to incorporate multiple constraint types may further improve robustness while maintaining computational efficiency.
+
+Investigating these extensions within the proposed framework represents a promising direction for improving real-time tracking performance on resource-constrained devices.

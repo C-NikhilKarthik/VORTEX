@@ -1,62 +1,89 @@
 \section{Methodology: From Algebraic to Geometric Tracking}
 
-To achieve unprecedented tracking performance and resolve the inherent instability of pure algebraic point-matching, our team has built a novel, deep-optimized three-stage tracking architecture. We detail each progressive component of our custom pipeline below.
+To address the limitations of purely algebraic tracking while maintaining real-time performance on edge devices, we design a three-stage tracking architecture that progressively incorporates hardware-aware acceleration and geometric reasoning. Each stage builds upon the previous one, transitioning from efficient 2D correspondence estimation to robust 6-DoF pose refinement on $\mathrm{SE}(3)$.
 
 \input{figures/pipeline}
 
-\subsection{Stage 1: Highly-Optimized CPU Foundation (Algebraic)}
+\subsection{Stage 1: Optimized CPU-Based Tracking (Algebraic)}
 
-The foundation of our architecture is a custom-built, feature-based tracking pipeline executed entirely on the CPU. While this stage relies on 2D algebraic constraints (homography) without explicit 3D geometric awareness, our team has uniquely engineered it to maximize scalar throughput far beyond standard library implementations.
+The first stage consists of a feature-based tracking pipeline executed entirely on the CPU. This stage relies on 2D algebraic constraints for motion estimation and is carefully optimized for high throughput on mobile processors.
 
 \paragraph{Feature Extraction and Matching.}
-Incoming camera frames are first converted to grayscale. Keypoint detection is performed using a high-speed corner detector (e.g., FAST), followed by non-maximum suppression to ensure spatial sparsity. For valid keypoints, orientation is estimated via local gradients, and binary descriptors (e.g., BRISK) are constructed. 
-These descriptors are matched against a pre-computed dictionary of reference descriptors using Hamming distance.
+Incoming frames are converted to grayscale, and keypoints are detected using a high-speed corner detector (e.g., FAST), followed by non-maximum suppression to enforce spatial sparsity. For each keypoint, orientation is estimated using local image gradients, and binary descriptors (e.g., BRISK) are constructed. Descriptor matching is performed against a precomputed reference set using Hamming distance.
 
-\paragraph{Algebraic Pose Initialization (Homography).}
-Given a set of tentative 2D correspondences $\{\mathbf{x}_i \leftrightarrow \mathbf{x}'_i\}$ between the reference image and the live camera frame, we estimate a homography matrix $\mathbf{H}$ using the Direct Linear Transform (DLT) coupled with RANSAC to reject outliers:
+\paragraph{Algebraic Pose Initialization.}
+Given a set of 2D correspondences $\{\mathbf{x}_i \leftrightarrow \mathbf{x}'_i\}$, a homography $\mathbf{H}$ is estimated using Direct Linear Transform (DLT) with RANSAC for outlier rejection:
 \begin{equation}
-\mathbf{x}'_i \sim \mathbf{H} \mathbf{x}_i.
+\mathbf{x}'_i \sim \mathbf{H}\mathbf{x}_i.
 \end{equation}
-While $\mathbf{H}$ provides planar alignment, it is notoriously unstable under severe scale changes or highly oblique viewing angles.
+While efficient, this formulation assumes planar structure and becomes unstable under strong perspective distortion, scale changes, or out-of-plane rotations.
 
 \paragraph{Optical Flow Tracking.}
-Once $\mathbf{H}$ is successfully initialized, tracking transitions to a pyramidal Lucas--Kanade (LK) optical flow algorithm to track the surviving inlier points frame-to-frame. 
+After initialization, tracking proceeds using a pyramidal Lucas--Kanade (LK) optical flow method to propagate inlier correspondences across frames, reducing the need for repeated feature extraction.
 
-\paragraph{Optimization via SIMD.}
-To maximize performance, all operations in this foundational stage are heavily optimized using custom CPU SIMD instruction sets (e.g., ARM NEON) and advanced C++ auto-vectorization techniques crafted specifically for this pipeline. However, processing dense feature patterns ultimately bottlenecks sustained frame rates, necessitating our GPU acceleration stage.
+\paragraph{SIMD Optimization.}
+All components in this stage are optimized using SIMD vectorization (e.g., ARM NEON) and compiler auto-vectorization to maximize data-level parallelism. Despite these optimizations, feature extraction and matching remain a dominant computational bottleneck.
 
-\subsection{Stage 2: GPU-Accelerated Hardware Pipeline (Algebraic)}
+\subsection{Stage 2: GPU-Accelerated Feature Processing (Algebraic)}
 
-To relieve the CPU bottleneck, our team designed a bespoke GPU hardware pipeline that offloads the heaviest computational burdens—grayscale conversion, keypoint detection, and binary descriptor construction—entirely to custom fragment shaders. 
+To alleviate CPU bottlenecks, the second stage offloads feature extraction and descriptor computation to the GPU.
 
-Each pixel is processed independently, enabling massive data-parallel execution across the image domain. Descriptor bits are generated through pairwise intensity comparisons within a rotated sampling pattern directly inside the fragment stage. Furthermore, unlike standard implementations, we push descriptor matching to the GPU utilizing highly parallelized compute shaders.
+Grayscale conversion, keypoint detection, and descriptor construction are implemented using custom fragment shaders, enabling per-pixel parallel processing across the image domain. Descriptor bits are generated via pairwise intensity comparisons within rotated sampling patterns directly in the shader pipeline. Descriptor matching is further parallelized using compute shaders, significantly reducing matching latency.
 
-The matched correspondences are then transferred to main memory (CPU) for RANSAC homography estimation and Lucas--Kanade tracking, which reuse our highly optimized SIMD instructions.
-While this custom GPU pipeline drastically reduces extraction and matching latency to a fraction of a millisecond, the mathematical core remains bound by the inherent geometric instability of the 2D algebraic homography.
+The resulting correspondences are transferred back to the CPU for homography estimation and optical flow tracking. While this stage substantially improves throughput, the underlying motion model remains algebraic and inherits the same geometric limitations as Stage 1.
 
-\subsection{Stage 3: Full $\mathrm{SE}(3)$ Render-and-Track (Geometric)}
+\subsection{Stage 3: Geometry-Aware $\mathrm{SE}(3)$ Render-and-Track Refinement}
 
-To completely resolve the instability of the algebraic hardware pipelines, the critical third stage introduces our geometrically constrained tracking framework. This component leverages our custom GPU-accelerated pipeline alongside rendering at multiple depth hypotheses for an initial 6-DoF pose query, coupled with direct $\mathrm{SE}(3)$ refinement.
+To overcome the instability of purely algebraic methods, the third stage introduces a geometry-aware pose estimation framework that operates directly on the $\mathrm{SE}(3)$ manifold.
 
 \paragraph{Depth-Augmented Reference Modeling.}
-To address scale ambiguity, we render the known planar template or 3D mesh at a discrete set of depth hypotheses in camera space. For each scale level, two buffers are generated:
+To resolve scale ambiguity, the known object geometry is rendered at a discrete set of depth hypotheses. For each hypothesis, two buffers are generated:
 \begin{itemize}
-    \item \textbf{Appearance buffer:} Used for GPU feature extraction.
-    \item \textbf{Coordinate buffer:} A per-pixel encoding of object-space coordinates corresponding to visible surface points.
+    \item \textbf{Appearance buffer:} Used for feature extraction and matching.
+    \item \textbf{Coordinate buffer:} Stores per-pixel object-space coordinates of visible surface points.
 \end{itemize}
 
 \paragraph{Direct 2D--3D Correspondence Lifting.}
-Instead of relying on a 2D-to-2D homography, every valid descriptor match immediately retrieves its corresponding 3D object-space coordinate $\mathbf{X}_i$ from the coordinate buffer. This directly constructs a set of 2D--3D correspondences without explicit back-projection.
+Each valid descriptor match directly retrieves its corresponding 3D point $\mathbf{X}_i$ from the coordinate buffer, forming a set of 2D--3D correspondences without requiring explicit back-projection or triangulation.
 
-\paragraph{Gauss--Newton Optimization on $\mathrm{SE}(3)$.}
-Let $\mathbf{x}_i$ denote the normalized image coordinate of the camera observation. The camera pose $\mathbf{T} \in \mathrm{SE}(3)$ is estimated by minimizing the true geometric reprojection error:
+\paragraph{Tension-Based Pose Refinement on $\mathrm{SE}(3)$.}
+
+Let $\mathbf{x}_i$ denote the observed normalized image coordinate and $\mathbf{p}_i(\mathbf{T}) = \pi(\mathbf{K}\mathbf{T}\mathbf{X}_i)$ denote the projected point under pose $\mathbf{T} \in \mathrm{SE}(3)$. The reprojection residual is:
+\begin{equation}
+\mathbf{e}_i = \mathbf{x}_i - \mathbf{p}_i(\mathbf{T}), \quad d_i = \|\mathbf{e}_i\|.
+\end{equation}
+
+We model each correspondence as a virtual spring in image space, where the residual magnitude $d_i$ defines the spring length. The smallest residual
+\[
+L = \min_i d_i
+\]
+is treated as a reference equilibrium. The resulting tension induces an adaptive weight:
+\begin{equation}
+w_i = \frac{d_i - L}{d_i}.
+\end{equation}
+
+This formulation assigns higher influence to inconsistent correspondences while suppressing those already close to agreement.
+
+Pose refinement is then formulated as a weighted nonlinear least-squares problem:
 \begin{equation}
 E(\mathbf{T}) =
-\sum_i
-\left\|
-\mathbf{x}_i - \pi(\mathbf{K}\mathbf{T}\mathbf{X}_i)
-\right\|^2,
+\sum_i w_i \left\| \mathbf{x}_i - \pi(\mathbf{K}\mathbf{T}\mathbf{X}_i) \right\|^2.
 \end{equation}
-where $\mathbf{K}$ is the intrinsic matrix and $\pi(\cdot)$ denotes perspective division. Pose updates are represented in Lie algebra form $\boldsymbol{\xi} \in \mathbb{R}^6$, and the update is solved iteratively. 
 
-Because 3D coordinates are explicitly provided by the render pass, this refinement enforces rigid-body constraints during optimization. The integration of this $\mathrm{SE}(3)$ stage ensures our complete tracking pipeline consistently overcomes the jitter and collapse scenarios common to purely algebraic methods.
+Linearizing on the Lie algebra $\mathfrak{se}(3)$ yields the weighted Gauss--Newton update:
+\begin{equation}
+(\mathbf{J}^\top \mathbf{W} \mathbf{J})\,\boldsymbol{\delta}
+=
+\mathbf{J}^\top \mathbf{W} \mathbf{e},
+\end{equation}
+where $\mathbf{W} = \mathrm{diag}(w_i)$.
+
+The pose is updated via the exponential map:
+\begin{equation}
+\mathbf{T} \leftarrow \exp(\boldsymbol{\delta}^\wedge)\mathbf{T}.
+\end{equation}
+
+This physics-inspired formulation adaptively reweights correspondences based on relative residual structure, improving robustness without requiring manually tuned robust loss functions.
+
+\paragraph{System Integration.}
+The complete system operates as a detect--refine--track pipeline. Global feature matching provides initialization, $\mathrm{SE}(3)$ refinement ensures geometric consistency, and optical flow enables efficient frame-to-frame tracking. This hybrid design achieves robust 6-DoF pose estimation while maintaining real-time performance on mobile-class hardware.

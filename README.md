@@ -49,6 +49,4 @@ Navigate to `http://localhost:5173/` to interact with the project showcase.
 ## 📊 Performance
 
 Experimental evaluations on Android-based mobile hardware demonstrate that integrating the GPU-accelerated algebraic tracking with the proposed **Spring-Hook geometry-aware SE(3) refinement** severely out-competes pure algebraic tracking. The framework achieves flawless real-time 6-DoF object tracking, optimizing computational throughput while resolving instability in volatile tracking conditions.
-
----
 *Developed by the VORTEX Research Team.*

@@ -1,70 +1,78 @@
 \section{Algebraic Tracking Pipeline}
 
-The CPU and GPU tracking configurations share a common algebraic tracking formulation based on feature correspondences and planar homography estimation. This formulation provides efficient frame-to-frame motion estimation but lacks explicit geometric constraints, which can lead to instability under challenging viewing conditions.
+The CPU and GPU tracking configurations share a common algebraic formulation based on feature correspondences and planar homography estimation. This formulation enables efficient frame-to-frame motion estimation, but lacks explicit geometric constraints, which can lead to instability under challenging viewing conditions such as partial visibility or large perspective changes.
 
 \subsection{Feature Detection and Matching}
 
-Given an input frame, salient keypoints are detected using the FAST corner detector. For each detected keypoint, a binary descriptor is computed to encode the local image structure. In our implementation, BRISK descriptors are used due to their robustness and efficient binary representation.
+Given an input frame, salient keypoints are detected using the FAST corner detector \cite{rosten2006fast}. For each keypoint, a binary descriptor is computed to encode local image structure. In our implementation, BRISK descriptors \cite{leutenegger2011brisk} are employed due to their robustness and compact binary representation.
 
-Correspondences between frames are established by comparing binary descriptors using Hamming distance. This operation is implemented using population-count (popcount) instructions on the CPU and parallel compute kernels on the GPU. Despite the difference in hardware execution, both implementations compute the same matching criterion based on bitwise XOR operations.
-
-Let $d_i$ and $d_j$ denote two binary descriptors. Their similarity is evaluated as
-
+Correspondences between frames are established by comparing descriptors using Hamming distance. Let $d_i$ and $d_j$ denote two binary descriptors. Their similarity is computed as:
 \[
-D(d_i,d_j) = \mathrm{popcount}(d_i \oplus d_j)
+D(d_i,d_j) = \mathrm{popcount}(d_i \oplus d_j),
 \]
+where $\oplus$ denotes the bitwise XOR operation and $\mathrm{popcount}(\cdot)$ counts the number of set bits. Correspondences are selected by identifying nearest neighbors under this metric, optionally filtered using ratio tests to reject ambiguous matches.
 
-where $\oplus$ denotes the XOR operation and $\mathrm{popcount}(\cdot)$ counts the number of set bits. Correspondences are selected by minimizing this distance.
+This operation is efficiently implemented on the CPU using SIMD instructions and on the GPU using parallel compute kernels, while preserving identical matching semantics across both execution paths.
 
 \subsection{Homography-Based Motion Estimation}
 
-Given a set of matched feature points $(x_i, y_i) \leftrightarrow (x'_i, y'_i)$, camera motion is estimated using a planar homography transformation. The homography matrix
-
-\[
-H =
-\begin{bmatrix}
-h_{11} & h_{12} & h_{13} \\
-h_{21} & h_{22} & h_{23} \\
-h_{31} & h_{32} & h_{33}
-\end{bmatrix}
-\]
-
-relates corresponding points between frames according to
-
+Given a set of matched feature points $(x_i, y_i) \leftrightarrow (x'_i, y'_i)$, motion is estimated using a planar homography transformation:
 \[
 \lambda
 \begin{bmatrix}
-x' \\
-y' \\
+x'_i \\
+y'_i \\
 1
 \end{bmatrix}
 =
 H
 \begin{bmatrix}
-x \\
-y \\
+x_i \\
+y_i \\
 1
-\end{bmatrix}.
+\end{bmatrix},
 \]
+where $H \in \mathbb{R}^{3 \times 3}$ is the homography matrix.
 
-The parameters of $H$ are estimated using the Direct Linear Transform (DLT) formulation
-
+Stacking constraints from all correspondences yields the homogeneous system:
 \[
-A\mathbf{h} = 0
+A \mathbf{h} = 0,
 \]
+where $\mathbf{h}$ is the vectorized form of $H$. The solution is obtained via singular value decomposition (SVD) as the right singular vector corresponding to the smallest singular value.
 
-where $\mathbf{h}$ represents the vectorized homography parameters. To improve robustness against mismatches, the estimation is performed within a RANSAC framework. Frame-to-frame tracking is further stabilized using Lucas--Kanade optical flow for local motion updates.
+To improve robustness, homography estimation is performed within a RANSAC framework, which iteratively samples minimal subsets of correspondences and selects the model with the largest consensus set. After initialization, frame-to-frame tracking is maintained using pyramidal Lucas--Kanade optical flow \cite{lucaskanade1981}, reducing the need for repeated feature detection.
 
 \subsection{Numerical Instability Under Partial Visibility}
 
-Although computationally efficient, homography estimation becomes unstable when feature correspondences occupy only a small region of the image. In such cases, the matrix $A$ constructed by the DLT formulation becomes poorly conditioned because the coordinate values of the correspondences are highly correlated.
+Although computationally efficient, homography estimation becomes ill-conditioned when feature correspondences are spatially localized. In such cases, the matrix $A$ exhibits strong column correlations, leading to a poorly conditioned system.
 
-The sensitivity of the solution can be characterized by the condition number $\kappa(A)$. When $\kappa(A)$ becomes large, small perturbations in the observed feature locations result in large changes in the estimated homography:
-
+The sensitivity of the solution can be quantified using the condition number $\kappa(A)$:
+\[
+\kappa(A) = \frac{\sigma_{\max}}{\sigma_{\min}},
+\]
+where $\sigma_{\max}$ and $\sigma_{\min}$ are the largest and smallest singular values of $A$, respectively. A large condition number implies that small perturbations in the input correspondences can produce large variations in the estimated homography:
 \[
 \|\Delta \mathbf{h}\| \leq \kappa(A)\|\Delta \mathbf{b}\|.
 \]
 
-In practice, this occurs when the visible portion of the object is small or when feature points are clustered within a limited image region. The system then lacks sufficient geometric leverage to estimate the projective parameters of the homography reliably. As a result, small tracking errors introduced by Lucas--Kanade optical flow may cause large distortions in the projected object pose.
+This situation commonly arises when:
+\begin{itemize}
+    \item Only a small portion of the object is visible
+    \item Feature points are clustered within a limited region
+    \item The scene exhibits near-planar degeneracy
+\end{itemize}
 
-Furthermore, the RANSAC estimation process becomes highly sensitive to outliers when only a small number of correspondences are available. Minor drift in a few feature points may cause the inlier consensus to fail, resulting in intermittent tracking loss or large pose fluctuations. These limitations motivate the geometry-aware refinement stage introduced in the following section.
+Under these conditions, the system lacks sufficient spatial diversity to constrain all degrees of freedom of the homography. Consequently, even small tracking errors introduced by Lucas--Kanade optical flow can result in large distortions in the estimated transformation.
+
+Additionally, RANSAC becomes less reliable when the number of correspondences is low. The probability of sampling a valid minimal subset decreases, and the consensus set becomes unstable. This leads to intermittent tracking failures and large pose fluctuations.
+
+\subsection{Limitations of Algebraic Formulation}
+
+The core limitation of homography-based tracking lies in its purely algebraic nature. The formulation does not explicitly enforce 3D geometric consistency and treats correspondences only as 2D projective constraints. As a result:
+\begin{itemize}
+    \item Depth and scale are implicitly coupled and poorly constrained
+    \item Out-of-plane rotations are not accurately modeled
+    \item Degenerate configurations lead to unstable solutions
+\end{itemize}
+
+These limitations motivate the transition to a geometry-aware formulation, where correspondences are lifted to 2D--3D constraints and pose is optimized directly on the $\mathrm{SE}(3)$ manifold. The following section introduces this formulation and demonstrates how it improves robustness through explicit geometric reasoning and adaptive optimization.
