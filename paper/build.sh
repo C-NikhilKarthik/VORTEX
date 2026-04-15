@@ -24,10 +24,11 @@ echo ""
 echo "Done! Output: $OUT_DIR/$MAIN.pdf"
 
 # Copy the paper to the web application's public directory
-WEB_PUBLIC_DIR="../web/public"
-mkdir -p "$WEB_PUBLIC_DIR"
-cp "$OUT_DIR/$MAIN.pdf" "$WEB_PUBLIC_DIR/paper.pdf"
-echo "Copied paper to web directory: $WEB_PUBLIC_DIR/paper.pdf"
+
+# WEB_PUBLIC_DIR="../web/public"
+# mkdir -p "$WEB_PUBLIC_DIR"
+# cp "$OUT_DIR/$MAIN.pdf" "$WEB_PUBLIC_DIR/paper.pdf"
+# echo "Copied paper to web directory: $WEB_PUBLIC_DIR/paper.pdf"
 
 # Optional: open the PDF automatically
 # open "$OUT_DIR/$MAIN.pdf"
